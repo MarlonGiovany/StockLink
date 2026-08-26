@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-md-5 col-lg-4">
+    <div class="card shadow-sm mt-5">
+      <div class="card-body p-4">
+        <h3 class="text-center mb-1" style="color:#162D63;font-weight:700;">📦 StockLink</h3>
+        <p class="text-center text-muted mb-4">Controle de equipamentos e patrimônio</p>
+
+        {% if form.errors %}
+          <div class="alert alert-danger">Usuário ou senha inválidos.</div>
+        {% endif %}
+
+        <form method="post">
+          {% csrf_token %}
+          <div class="mb-3">
+            <label class="form-label">Usuário</label>
+            <input type="text" name="username" class="form-control" autofocus required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Senha</label>
+            <input type="password" name="password" class="form-control" required>
+          </div>
+          <button type="submit" class="btn w-100 text-white" style="background:#16A34A;">Entrar</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

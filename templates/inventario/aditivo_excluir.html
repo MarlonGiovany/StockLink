@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titulo %}Excluir aditivo — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-danger"><div class="card-body">
+      <h5 class="text-danger">Excluir aditivo {{ aditivo.numero }}</h5>
+      <p>Tem certeza que deseja excluir o <strong>aditivo {{ aditivo.numero }}</strong>
+         ({{ aditivo.get_tipo_display }} — {{ aditivo.descricao }})
+         do contrato <strong>{{ contrato.numero }}</strong>?</p>
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn btn-danger">Sim, excluir</button>
+        <a href="{% url 'contrato_detalhe' contrato.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

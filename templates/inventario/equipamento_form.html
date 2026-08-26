@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-8">
+    <a href="{% url 'equipamento_lista' %}" class="text-muted text-decoration-none">&larr; Equipamentos</a>
+    <h4 class="mt-1 mb-3">{{ titulo }}</h4>
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <form method="post" novalidate>
+          {% csrf_token %}
+
+          {# ---------- 1) PRODUTO — bloco em destaque, no topo ---------- #}
+          <div class="border rounded-3 p-3 mb-4" style="background:#f8fafc; border-color:#dbe3ef !important;">
+            <h6 class="text-uppercase text-muted small fw-bold mb-1">Produto</h6>
+            <p class="small text-muted mb-2">Escolha o que você está cadastrando.</p>
+
+            <div class="row g-2 align-items-start">
+              <div class="col-md-8">
+                <label class="form-label" for="{{ form.produto.id_for_label }}">{{ form.produto.label }}</label>
+                {{ form.produto }}
+                {% if form.produto.errors %}<div class="text-danger small">{{ form.produto.errors|striptags }}</div>{% endif %}
+              </div>
+              {% if perms.inventario.add_produto %}
+              <div class="col-md-4 d-grid align-self-end">
+                <label class="form-label d-none d-md-block">&nbsp;</label>
+                <button type="button" class="btn btn-sm btn-outline-primary"
+                        data-bs-toggle="modal" data-bs-target="#modalNovoProduto">
+                  + Adicionar novo produto
+                </button>
+              </div>
+              {% endif %}
+            </div>
+            {% if perms.inventario.add_produto %}
+            <div class="form-text mt-2">
+              Não achou na lista? Use o botão para incluir o produto sem perder o que já foi digitado.
+            </div>
+            {% endif %}
+          </div>
+
+          {# ---------- 2) CONFIGURAÇÃO — só para Desktop / Notebook ---------- #}
+          <div id="bloco-configuracao" class="border rounded-3 p-3 mb-4 d-none"
+               style="background:#f2f8f4; border-color:#cfe6d7 !important;">
+            <h6 class="text-uppercase text-muted small fw-bold mb-1">Configuração</h6>
+            <p class="small text-muted mb-3">Ficha técnica do equipamento.</p>
+            <div class="row g-3">
+              {% for field in form %}
+                {% if field.name in campos_configuracao %}
+                <div class="col-md-4">
+                  <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                  {{ field }}
+                  {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+                </div>
+                {% endif %}
+              {% endfor %}
+            </div>
+          </div>
+
+          {# ---------- 3) DEMAIS CAMPOS ---------- #}
+          <h6 class="text-uppercase text-muted small fw-bold mb-3">Dados do equipamento</h6>
+          <div class="row g-3">
+            {% for field in form %}
+              {% if field.name != "produto" and field.name not in campos_configuracao %}
+              <div class="col-md-6">
+                <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
+                {{ field }}
+                {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+              </div>
+              {% endif %}
+            {% endfor %}
+          </div>
+
+          <div class="mt-4">
+            <button class="btn text-white" style="background:#16A34A;">Salvar</button>
+            <a href="{% url 'equipamento_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{# ---------- MODAL: novo produto (FORA do <form> principal) ---------- #}
+{% if perms.inventario.add_produto %}
+<div class="modal fade" id="modalNovoProduto" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Adicionar novo produto</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <label class="form-label" for="novo-produto-nome">Nome do produto</label>
+        <input type="text" class="form-control" id="novo-produto-nome"
+               placeholder="Ex.: Projetor, Servidor, Nobreak..." autocomplete="off">
+        <div class="form-text">O produto entra na lista e já fica escolhido aqui no cadastro.</div>
+        <div id="novo-produto-erro" class="text-danger small mt-2 d-none"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn text-white" style="background:#16A34A;" id="novo-produto-salvar">Salvar</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  // IDs dos produtos que pedem ficha técnica (ex.: Desktop e Notebook)
+  var IDS_COM_CONFIGURACAO = {{ produtos_config_json }};
+
+  var selectProduto = document.getElementById("{{ form.produto.id_for_label }}");
+  var blocoConfiguracao = document.getElementById("bloco-configuracao");
+
+  // ---- Mostrar / esconder os campos de configuração ----
+  function atualizarConfiguracao() {
+    if (!selectProduto || !blocoConfiguracao) { return; }
+    var id = parseInt(selectProduto.value, 10);
+    var pedeConfiguracao = !isNaN(id) && IDS_COM_CONFIGURACAO.indexOf(id) !== -1;
+    if (pedeConfiguracao) {
+      blocoConfiguracao.classList.remove("d-none");
+    } else {
+      blocoConfiguracao.classList.add("d-none");
+    }
+  }
+
+  if (selectProduto) {
+    selectProduto.addEventListener("change", atualizarConfiguracao);
+  }
+  atualizarConfiguracao(); // vale para "Editar" e para o formulário que voltou com erro
+
+  // ---- Modal "Adicionar novo produto" ----
+  var modalEl = document.getElementById("modalNovoProduto");
+  var botaoSalvar = document.getElementById("novo-produto-salvar");
+  var campoNome = document.getElementById("novo-produto-nome");
+  var caixaErro = document.getElementById("novo-produto-erro");
+
+  if (!modalEl || !botaoSalvar || !campoNome || !selectProduto) { return; }
+
+  function mostrarErro(mensagem) {
+    caixaErro.textContent = mensagem;
+    caixaErro.classList.remove("d-none");
+  }
+
+  function limparErro() {
+    caixaErro.textContent = "";
+    caixaErro.classList.add("d-none");
+  }
+
+  function pegarCsrf() {
+    var campo = document.querySelector("[name=csrfmiddlewaretoken]");
+    return campo ? campo.value : "";
+  }
+
+  modalEl.addEventListener("shown.bs.modal", function () {
+    limparErro();
+    campoNome.focus();
+  });
+
+  campoNome.addEventListener("keydown", function (evento) {
+    if (evento.key === "Enter") {
+      evento.preventDefault();
+      botaoSalvar.click();
+    }
+  });
+
+  botaoSalvar.addEventListener("click", function () {
+    var nome = campoNome.value.trim();
+    limparErro();
+
+    if (!nome) {
+      mostrarErro("Escreva o nome do produto.");
+      campoNome.focus();
+      return;
+    }
+
+    botaoSalvar.disabled = true;
+
+    fetch("{% url 'produto_novo' %}", {
+      method: "POST",
+      headers: {
+        "X-Requested-With": "XMLHttpRequest",
+        "X-CSRFToken": pegarCsrf()
+      },
+      body: new URLSearchParams({ nome: nome })
+    })
+    .then(function (resposta) {
+      if (resposta.status === 403) {
+        throw new Error("Você não tem permissão para adicionar produtos.");
+      }
+      return resposta.json().catch(function () {
+        throw new Error("Não foi possível salvar o produto. Tente de novo.");
+      });
+    })
+    .then(function (dados) {
+      if (!dados || !dados.ok) {
+        mostrarErro((dados && dados.erro) || "Não foi possível salvar o produto.");
+        campoNome.focus();
+        return;
+      }
+
+      // Coloca o produto novo na lista e já deixa escolhido
+      var opcao = selectProduto.querySelector('option[value="' + dados.id + '"]');
+      if (!opcao) {
+        opcao = document.createElement("option");
+        opcao.value = dados.id;
+        opcao.textContent = dados.nome;
+        selectProduto.appendChild(opcao);
+      }
+      selectProduto.value = String(dados.id);
+
+      // Produto novo pode pedir ficha técnica
+      if (dados.pede_configuracao && IDS_COM_CONFIGURACAO.indexOf(dados.id) === -1) {
+        IDS_COM_CONFIGURACAO.push(dados.id);
+      }
+      atualizarConfiguracao();
+
+      campoNome.value = "";
+      limparErro();
+      bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    })
+    .catch(function (erro) {
+      mostrarErro(erro.message || "Não foi possível falar com o servidor. Tente de novo.");
+    })
+    .then(function () {
+      botaoSalvar.disabled = false;
+    });
+  });
+});
+</script>
+{% endblock %}

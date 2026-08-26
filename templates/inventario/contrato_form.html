@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <a href="{% url 'contrato_lista' %}" class="text-muted text-decoration-none">&larr; Contratos</a>
+    <h4 class="mt-1 mb-3">{{ titulo }}</h4>
+    {% if locacao %}
+      <div class="alert alert-info py-2">
+        Vinculando à locação de <strong>{{ locacao.equipamento }}</strong>
+        para <strong>{{ locacao.cliente }}</strong>. Cliente e título já vêm preenchidos.
+      </div>
+    {% endif %}
+    <div class="card shadow-sm"><div class="card-body">
+      <form method="post" enctype="multipart/form-data" novalidate
+            action="{% if contrato %}{% url 'contrato_editar' contrato.pk %}{% else %}{% url 'contrato_novo' %}{% if locacao %}?locacao={{ locacao.pk }}{% endif %}{% endif %}">
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.name == "arquivo" and contrato and contrato.arquivo %}
+            <div class="form-text">
+              Arquivo atual:
+              <a href="{{ contrato.arquivo.url }}" target="_blank">📄 {{ contrato.nome_arquivo }}</a>
+              — envie um novo só se quiser substituir.
+            </div>
+          {% endif %}
+          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
+          {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <button class="btn text-white" style="background:#16A34A;">Salvar</button>
+        <a href="{% url 'contrato_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

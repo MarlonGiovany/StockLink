@@ -1,0 +1,16 @@
+# Ambiente Python
+venv/
+__pycache__/
+*.pyc
+
+# Banco de dados local e mídia (dados reais de produção — não versionar)
+db.sqlite3
+media/
+
+# Arquivos estáticos coletados (gerados por collectstatic)
+staticfiles/
+
+# Arquivos do sistema operacional / editor
+.vscode/
+.DS_Store
+Thumbs.db

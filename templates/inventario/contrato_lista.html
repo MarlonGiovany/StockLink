@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block titulo %}Contratos — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Contratos <span class="text-muted fs-6">({{ total }})</span></h4>
+  {% if perms.inventario.add_contrato %}
+  <a href="{% url 'contrato_novo' %}" class="btn text-white" style="background:#16A34A;">+ Anexar contrato</a>
+  {% endif %}
+</div>
+
+<form method="get" class="row g-2 mb-3 align-items-end">
+  <div class="col-md-4">
+    <label class="form-label small text-muted mb-1">Buscar</label>
+    <input type="text" name="q" value="{{ termo }}" class="form-control"
+           placeholder="Número, título ou cliente...">
+  </div>
+  <div class="col-md-3">
+    <label class="form-label small text-muted mb-1">Ordenar por</label>
+    <select name="ordenar" class="form-select">
+      {% for chave, info in ordens.items %}
+        <option value="{{ chave }}" {% if chave == ordenar %}selected{% endif %}>{{ info.1 }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small text-muted mb-1">De</label>
+    <input type="date" name="de" value="{{ de }}" class="form-control">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small text-muted mb-1">Até</label>
+    <input type="date" name="ate" value="{{ ate }}" class="form-control">
+  </div>
+  <div class="col-md-1">
+    <button class="btn btn-primary w-100">Filtrar</button>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Número</th><th>Título / objeto</th><th>Cliente</th>
+          <th>Máquinas</th><th>Data</th><th>Valor</th><th>PDF</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in contratos %}
+        <tr>
+          <td><a href="{% url 'contrato_detalhe' c.pk %}" class="text-decoration-none"><strong>{{ c.numero }}</strong></a></td>
+          <td>{{ c.titulo|default:"—" }}</td>
+          <td>{{ c.cliente|default:"—" }}</td>
+          <td>
+            {% if c.qtd_maquinas %}
+              <span class="badge bg-light text-dark border">{{ c.qtd_maquinas }}</span>
+            {% else %}
+              <span class="text-muted">—</span>
+            {% endif %}
+          </td>
+          <td>{{ c.data_contrato|date:"d/m/Y" }}</td>
+          <td>{% if c.valor %}R$ {{ c.valor|floatformat:2 }}{% else %}—{% endif %}</td>
+          <td>
+            {% if c.arquivo %}
+              <a href="{{ c.arquivo.url }}" target="_blank" class="btn btn-sm btn-outline-danger" title="{{ c.nome_arquivo }}">
+                📄 Abrir
+              </a>
+            {% else %}—{% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'contrato_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary">Ver</a>
+            {% if perms.inventario.change_contrato %}
+              <a href="{% url 'contrato_editar' c.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+            {% endif %}
+            {% if perms.inventario.delete_contrato %}
+              <a href="{% url 'contrato_excluir' c.pk %}" class="btn btn-sm btn-outline-danger">Excluir</a>
+            {% endif %}
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="8" class="text-center text-muted py-4">Nenhum contrato encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

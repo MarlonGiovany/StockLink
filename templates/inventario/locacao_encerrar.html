@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar devolução — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5>Registrar devolução</h5>
+      <p>Confirmar a devolução do equipamento <strong>{{ equipamento }}</strong>,
+         locado para <strong>{{ locacao.cliente }}</strong>?</p>
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn btn-success">Confirmar devolução</button>
+        <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

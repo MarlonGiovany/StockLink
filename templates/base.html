@@ -1,0 +1,59 @@
+{% load static %}
+<!doctype html>
+<html lang="pt-br">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block titulo %}StockLink{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background:#f4f6fb; }
+        .navbar-brand { font-weight:700; letter-spacing:.5px; }
+        .badge-status { font-size:.8rem; }
+    </style>
+</head>
+<body>
+{% if user.is_authenticated %}
+<nav class="navbar navbar-expand-lg navbar-dark" style="background:#162D63;">
+    <div class="container">
+        <a class="navbar-brand" href="{% url 'equipamento_lista' %}">📦 StockLink</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="nav">
+            <ul class="navbar-nav me-auto">
+                <li class="nav-item"><a class="nav-link" href="{% url 'equipamento_lista' %}">Equipamentos</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'contrato_lista' %}">Contratos</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'cliente_lista' %}">Clientes</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'fornecedor_lista' %}">Fornecedores</a></li>
+                {% if user.is_staff %}
+                <li class="nav-item"><a class="nav-link" href="/admin/">Administração</a></li>
+                {% endif %}
+            </ul>
+            <span class="navbar-text text-white-50 me-3">Olá, {{ user.get_username }}</span>
+            <form action="{% url 'logout' %}" method="post" class="d-inline">
+                {% csrf_token %}
+                <button class="btn btn-sm btn-outline-light">Sair</button>
+            </form>
+        </div>
+    </div>
+</nav>
+{% endif %}
+
+<div class="container my-4">
+    {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}
+    {% endif %}
+
+    {% block conteudo %}{% endblock %}
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

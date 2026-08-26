@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Fornecedores — StockLink{% endblock %}
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Fornecedores</h4>
+  {% if perms.inventario.add_fornecedor %}
+  <a href="{% url 'fornecedor_novo' %}" class="btn text-white" style="background:#16A34A;">+ Novo fornecedor</a>
+  {% endif %}
+</div>
+<div class="card shadow-sm"><div class="table-responsive">
+  <table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>Nome</th><th>CNPJ</th><th>Telefone</th><th>E-mail</th></tr></thead>
+    <tbody>
+      {% for f in fornecedores %}
+      <tr><td>{{ f.nome }}</td><td>{{ f.cnpj|default:"—" }}</td><td>{{ f.telefone|default:"—" }}</td><td>{{ f.email|default:"—" }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-center text-muted py-4">Nenhum fornecedor cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

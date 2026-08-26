@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Clientes — StockLink{% endblock %}
+{% block conteudo %}
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Clientes</h4>
+  {% if perms.inventario.add_cliente %}
+  <a href="{% url 'cliente_novo' %}" class="btn text-white" style="background:#16A34A;">+ Novo cliente</a>
+  {% endif %}
+</div>
+<div class="card shadow-sm"><div class="table-responsive">
+  <table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>Nome</th><th>Documento</th><th>Telefone</th><th>E-mail</th></tr></thead>
+    <tbody>
+      {% for c in clientes %}
+      <tr><td>{{ c.nome }}</td><td>{{ c.documento|default:"—" }}</td><td>{{ c.telefone|default:"—" }}</td><td>{{ c.email|default:"—" }}</td></tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-center text-muted py-4">Nenhum cliente cadastrado.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}

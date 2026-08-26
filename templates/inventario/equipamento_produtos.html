@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block titulo %}Equipamentos — StockLink{% endblock %}
+{% block conteudo %}
+
+<style>
+  .card-produto { transition: transform .12s ease, box-shadow .12s ease; }
+  .card-produto:hover { transform: translateY(-3px); box-shadow: 0 .5rem 1rem rgba(0,0,0,.15) !important; }
+  .card-produto .emoji-produto { font-size: 2.2rem; line-height: 1; }
+  .card-vazio { opacity: .55; }
+</style>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">Equipamentos</h4>
+  {% if perms.inventario.add_equipamento %}
+  <a href="{% url 'equipamento_novo' %}" class="btn text-white" style="background:#16A34A;">+ Novo equipamento</a>
+  {% endif %}
+</div>
+
+<form method="get" action="{% url 'equipamento_lista' %}" class="row g-2 mb-4">
+  <div class="col-md-10">
+    <input type="text" name="q" class="form-control"
+           placeholder="Buscar direto por marca, modelo, série, patrimônio ou local...">
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-primary w-100">Buscar</button>
+  </div>
+</form>
+
+<a href="{% url 'equipamento_lista' %}?produto=todos"
+   class="card card-produto shadow-sm text-decoration-none text-white mb-4"
+   style="background:#162D63;">
+  <div class="card-body d-flex justify-content-between align-items-center py-4">
+    <span>
+      <span class="emoji-produto me-2">🗂️</span>
+      <span class="fs-4 fw-semibold align-middle">Todos os equipamentos</span>
+    </span>
+    <span class="fs-2 fw-bold">{{ total_geral }}</span>
+  </div>
+</a>
+
+<h6 class="text-muted text-uppercase mb-3">Ou escolha um produto</h6>
+
+<div class="row row-cols-1 row-cols-sm-2 row-cols-md-3 g-3">
+  {% for produto in produtos %}
+  <a href="{% url 'equipamento_lista' %}?produto={{ produto.id }}" class="col text-decoration-none">
+    <div class="card card-produto h-100 shadow-sm {% if produto.qtd == 0 %}card-vazio{% endif %}">
+      <div class="card-body text-center py-4">
+        <div class="emoji-produto mb-2">
+          {% with nome=produto.nome|lower %}
+            {% if nome == "desktop" %}🖥️
+            {% elif nome == "notebook" %}💻
+            {% elif nome == "monitor" %}📺
+            {% elif nome == "impressora" %}🖨️
+            {% elif nome == "scanner" %}📠
+            {% elif nome == "estabilizador" %}🔌
+            {% elif nome == "transformador" %}⚡
+            {% else %}📦{% endif %}
+          {% endwith %}
+        </div>
+        <div class="fs-5 fw-semibold {% if produto.qtd == 0 %}text-muted{% else %}text-dark{% endif %}">
+          {{ produto.nome }}
+        </div>
+        <div class="text-muted small">
+          {% if produto.qtd == 0 %}
+            Nenhum cadastrado ainda
+          {% else %}
+            {{ produto.qtd }} equipamento{{ produto.qtd|pluralize }}
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </a>
+  {% empty %}
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-body text-center text-muted py-4">Nenhum produto cadastrado.</div>
+    </div>
+  </div>
+  {% endfor %}
+
+  {% if sem_produto > 0 %}
+  <a href="{% url 'equipamento_lista' %}?produto=sem" class="col text-decoration-none">
+    <div class="card card-produto h-100 shadow-sm border-warning">
+      <div class="card-body text-center py-4">
+        <div class="emoji-produto mb-2">❓</div>
+        <div class="fs-5 fw-semibold text-dark">Sem produto</div>
+        <div class="text-muted small">{{ sem_produto }} equipamento{{ sem_produto|pluralize }}</div>
+      </div>
+    </div>
+  </a>
+  {% endif %}
+</div>
+
+{% endblock %}

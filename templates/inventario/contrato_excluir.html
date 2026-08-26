@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block titulo %}Excluir contrato — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-danger"><div class="card-body">
+      <h5 class="text-danger">Excluir contrato</h5>
+      <p>Tem certeza que deseja excluir o <strong>{{ contrato }}</strong>?
+         Esta ação não pode ser desfeita e o PDF anexado também será apagado.</p>
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn btn-danger">Sim, excluir</button>
+        <a href="{% url 'contrato_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

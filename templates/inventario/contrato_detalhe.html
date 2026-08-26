@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block titulo %}Contrato {{ contrato.numero }} — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'contrato_lista' %}" class="text-muted text-decoration-none">&larr; Contratos</a>
+    <h4 class="mb-0 mt-1">Contrato {{ contrato.numero }}</h4>
+    <span class="text-muted">{{ contrato.titulo|default:"" }}</span>
+  </div>
+  <div class="text-end">
+    {% if contrato.arquivo %}
+      <a href="{{ contrato.arquivo.url }}" target="_blank" class="btn btn-sm btn-outline-danger">📄 Abrir PDF</a>
+    {% endif %}
+    {% if perms.inventario.change_contrato %}
+      <a href="{% url 'contrato_editar' contrato.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-12">
+    <div class="card shadow-sm"><div class="card-body">
+      <h6 class="text-uppercase text-muted">Dados do contrato</h6>
+      <table class="table table-sm mb-0">
+        <tr><th>Número</th><td>{{ contrato.numero }}</td></tr>
+        <tr><th>Cliente</th><td>{{ contrato.cliente|default:"—" }}</td></tr>
+        <tr><th>Data</th><td>{{ contrato.data_contrato|date:"d/m/Y" }}</td></tr>
+        <tr><th>Valor do contrato</th>
+            <td><strong>{% if contrato.valor %}R$ {{ contrato.valor|floatformat:2 }}{% else %}—{% endif %}</strong>
+            {% if perms.inventario.change_contrato %}
+              <a href="{% url 'contrato_editar' contrato.pk %}" class="small ms-2">alterar</a>
+            {% endif %}</td></tr>
+        <tr><th>Observações</th><td>{{ contrato.observacoes|default:"—"|linebreaksbr }}</td></tr>
+      </table>
+    </div></div>
+  </div>
+</div>
+
+<div class="card shadow-sm mt-3">
+  <div class="card-body">
+    <h6 class="text-uppercase text-muted mb-1">
+      Máquinas neste contrato <span class="text-muted">({{ qtd_maquinas }})</span>
+    </h6>
+    <p class="text-muted small mb-2">
+      Todas as locações vinculadas a este contrato. Para incluir outra máquina,
+      abra a ficha do equipamento, registre a locação e escolha este contrato.
+    </p>
+    {% if locacoes %}
+      <div class="table-responsive">
+        <table class="table table-sm table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Patrimônio</th><th>Produto</th><th>Equipamento</th>
+              <th class="text-end">Valor</th><th>Início</th><th>Situação</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for l in locacoes %}
+            <tr>
+              <td><strong>{{ l.equipamento.numero_patrimonio }}</strong></td>
+              <td>{{ l.equipamento.produto|default:"—" }}</td>
+              <td>{{ l.equipamento.marca }} {{ l.equipamento.modelo }}</td>
+              <td class="text-end">R$ {{ l.valor|floatformat:2 }}</td>
+              <td>{{ l.data_inicio|date:"d/m/Y" }}</td>
+              <td>
+                {% if l.ativa %}
+                  <span class="badge bg-success">Ativa</span>
+                {% else %}
+                  <span class="badge bg-secondary">Encerrada {{ l.data_fim|date:"d/m/Y" }}</span>
+                {% endif %}
+              </td>
+              <td class="text-end">
+                <a href="{% url 'equipamento_detalhe' l.equipamento.pk %}"
+                   class="btn btn-sm btn-outline-secondary py-0">Ver</a>
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Nenhuma máquina vinculada a este contrato ainda.</p>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card shadow-sm mt-3">
+  <div class="card-body">
+    <div class="d-flex justify-content-between align-items-center mb-1">
+      <h6 class="text-uppercase text-muted mb-0">Aditivos (histórico de alterações)</h6>
+      {% if perms.inventario.add_aditivo %}
+        <a href="{% url 'aditivo_novo' contrato.pk %}" class="btn btn-sm text-white" style="background:#16A34A;">+ Novo aditivo</a>
+      {% endif %}
+    </div>
+    <p class="text-muted small mb-2">Registro das alterações deste contrato. Não altera o valor do contrato (que é definido manualmente acima).</p>
+    {% if aditivos %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Nº</th><th>Operação</th><th>Equipamento / descrição</th>
+              <th class="text-end">Valor do equip.</th>
+              <th>Data</th><th>PDF</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for a in aditivos %}
+            <tr>
+              <td><strong>{{ a.numero }}</strong></td>
+              <td>
+                {% if a.tipo == "ADICAO" %}
+                  <span class="badge bg-success">+ Adição</span>
+                {% else %}
+                  <span class="badge bg-danger">− Remoção</span>
+                {% endif %}
+              </td>
+              <td>{{ a.descricao }}</td>
+              <td class="text-end">{% if a.valor %}R$ {{ a.valor|floatformat:2 }}{% else %}—{% endif %}</td>
+              <td>{{ a.data|date:"d/m/Y" }}</td>
+              <td>
+                {% if a.arquivo %}<a href="{{ a.arquivo.url }}" target="_blank">📄</a>{% else %}—{% endif %}
+              </td>
+              <td class="text-end">
+                {% if perms.inventario.delete_aditivo and a.id == ultimo_aditivo_id %}
+                  <a href="{% url 'aditivo_excluir' a.pk %}" class="btn btn-sm btn-outline-danger py-0">×</a>
+                {% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">Nenhum aditivo registrado ainda. Use <strong>+ Novo aditivo</strong> para registrar uma alteração do contrato.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

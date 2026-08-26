@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }} — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <a href="{% url voltar %}" class="text-muted text-decoration-none">&larr; Voltar</a>
+    <h4 class="mt-1 mb-3">{{ titulo }}</h4>
+    <div class="card shadow-sm"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="mb-3">
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+          {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <button class="btn text-white" style="background:#16A34A;">Salvar</button>
+        <a href="{% url voltar %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

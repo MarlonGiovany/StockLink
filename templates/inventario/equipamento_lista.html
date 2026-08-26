@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block titulo %}Equipamentos — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="mb-2">
+  <a href="{% url 'equipamento_lista' %}" class="text-decoration-none">&larr; Produtos</a>
+</div>
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <h4 class="mb-0">
+    {% if produto_atual %}{{ produto_atual.nome }}
+    {% elif produto_param == "todos" %}Todos os equipamentos
+    {% elif produto_param == "sem" %}Sem produto
+    {% else %}Equipamentos{% endif %}
+    <span class="text-muted fs-6">({{ total }})</span>
+  </h4>
+  {% if perms.inventario.add_equipamento %}
+  <a href="{% url 'equipamento_novo' %}" class="btn text-white" style="background:#16A34A;">+ Novo equipamento</a>
+  {% endif %}
+</div>
+
+<form method="get" class="row g-2 mb-3">
+  <input type="hidden" name="produto" value="{{ produto_param }}">
+  <div class="col-md-7">
+    <input type="text" name="q" value="{{ termo }}" class="form-control"
+           placeholder="Buscar por marca, modelo, série, patrimônio ou local...">
+  </div>
+  <div class="col-md-3">
+    <select name="status" class="form-select">
+      <option value="">Todos os status</option>
+      {% for valor, rotulo in status_choices %}
+        <option value="{{ valor }}" {% if valor == status_atual %}selected{% endif %}>{{ rotulo }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-primary w-100">Filtrar</button>
+  </div>
+</form>
+
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>Patrimônio</th><th>Produto</th><th>Marca</th><th>Modelo</th><th>Série</th>
+          <th>Local</th><th>Status</th><th>Manut.</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for eq in equipamentos %}
+        <tr>
+          <td><strong>{{ eq.numero_patrimonio }}</strong></td>
+          <td>{{ eq.produto|default:"—" }}</td>
+          <td>{{ eq.marca }}</td>
+          <td>{{ eq.modelo }}</td>
+          <td>{{ eq.numero_serie|default:"—" }}</td>
+          <td>{{ eq.local|default:"—" }}</td>
+          <td>
+            {% if eq.status == "DISPONIVEL" %}<span class="badge bg-success badge-status">Disponível</span>
+            {% elif eq.status == "LOCADO" %}<span class="badge bg-primary badge-status">Locado</span>
+            {% elif eq.status == "MANUTENCAO" %}<span class="badge bg-warning text-dark badge-status">Manutenção</span>
+            {% else %}<span class="badge bg-secondary badge-status">Baixado</span>{% endif %}
+          </td>
+          <td>
+            {% with nivel=eq.nivel_problema %}
+            <span class="d-inline-flex align-items-center gap-1"
+                  title="{{ nivel.qtd }} manutenção(ões) — {{ nivel.rotulo }}">
+              <span class="d-inline-block rounded-circle"
+                    style="width:13px;height:13px;background:{{ nivel.cor }};"></span>
+              {{ nivel.qtd }}
+            </span>
+            {% endwith %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'equipamento_detalhe' eq.pk %}" class="btn btn-sm btn-outline-secondary">Ver</a>
+          </td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="9" class="text-center text-muted py-4">Nenhum equipamento encontrado.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

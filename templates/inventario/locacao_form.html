@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% block titulo %}Registrar locação — StockLink{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="text-muted text-decoration-none">&larr; {{ equipamento }}</a>
+    <h4 class="mt-1 mb-3">Registrar locação</h4>
+    {% if not form.fields.cliente.queryset %}
+      <div class="alert alert-warning">Nenhum cliente cadastrado.
+        <a href="{% url 'cliente_novo' %}">Cadastre um cliente</a> primeiro.</div>
+    {% endif %}
+    <div class="card shadow-sm"><div class="card-body">
+      <form method="post" novalidate>
+        {% csrf_token %}
+        {% for field in form %}
+        <div class="mb-3 {% if field.name == 'ativa' %}form-check{% endif %}"
+             {% if field.name == 'contrato' %}id="bloco-contrato"{% endif %}>
+          <label class="form-label">{{ field.label }}</label>
+          {{ field }}
+
+          {% if field.name == 'contrato' %}
+            <div class="form-text" id="ajuda-contrato">{{ field.help_text }}</div>
+            <div class="form-text text-warning-emphasis d-none" id="aviso-sem-contrato">
+              Este cliente ainda não tem contrato cadastrado. Deixe em branco e
+              anexe o contrato depois, pela ficha do equipamento.
+            </div>
+          {% endif %}
+
+          {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+        </div>
+        {% endfor %}
+        <button class="btn text-white" style="background:#162D63;">Salvar locação</button>
+        <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+  var selectCliente = document.getElementById("{{ form.cliente.id_for_label }}");
+  var selectContrato = document.getElementById("{{ form.contrato.id_for_label }}");
+  var ajuda = document.getElementById("ajuda-contrato");
+  var avisoVazio = document.getElementById("aviso-sem-contrato");
+
+  if (!selectCliente || !selectContrato) { return; }
+
+  // Guarda a lista completa antes de começar a filtrar
+  var TODOS = [];
+  Array.prototype.forEach.call(selectContrato.options, function (opcao) {
+    TODOS.push({
+      valor: opcao.value,
+      texto: opcao.textContent,
+      cliente: opcao.getAttribute("data-cliente") || ""
+    });
+  });
+
+  // Mostra só os contratos do cliente escolhido
+  function filtrarContratos() {
+    var cliente = selectCliente.value;
+    var escolhido = selectContrato.value;
+    var achou = 0;
+
+    selectContrato.innerHTML = "";
+    TODOS.forEach(function (item) {
+      // A opção vazia ("— sem contrato por enquanto —") fica sempre
+      var ehVazia = item.valor === "";
+      if (!ehVazia && cliente && item.cliente !== cliente) { return; }
+      if (!ehVazia) { achou++; }
+
+      var opcao = document.createElement("option");
+      opcao.value = item.valor;
+      opcao.textContent = item.texto;
+      opcao.setAttribute("data-cliente", item.cliente);
+      selectContrato.appendChild(opcao);
+    });
+
+    // Mantém a escolha se ela continuar valendo
+    if (escolhido && selectContrato.querySelector('option[value="' + escolhido + '"]')) {
+      selectContrato.value = escolhido;
+    } else {
+      selectContrato.value = "";
+    }
+
+    var clienteEscolhido = Boolean(cliente);
+    selectContrato.disabled = !clienteEscolhido;
+    if (ajuda) { ajuda.classList.toggle("d-none", clienteEscolhido && achou === 0); }
+    if (avisoVazio) { avisoVazio.classList.toggle("d-none", !(clienteEscolhido && achou === 0)); }
+  }
+
+  selectCliente.addEventListener("change", filtrarContratos);
+  filtrarContratos(); // vale também quando o formulário volta com erro
+});
+</script>
+{% endblock %}

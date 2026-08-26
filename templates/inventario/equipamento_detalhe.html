@@ -1,0 +1,186 @@
+{% extends "base.html" %}
+{% block titulo %}{{ equipamento }} — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    {% if equipamento.produto %}
+      <a href="{% url 'equipamento_lista' %}?produto={{ equipamento.produto.pk }}"
+         class="text-muted text-decoration-none">&larr; {{ equipamento.produto }}</a>
+    {% else %}
+      <a href="{% url 'equipamento_lista' %}" class="text-muted text-decoration-none">&larr; Equipamentos</a>
+    {% endif %}
+    <h4 class="mb-0 mt-1">{{ equipamento.marca }} {{ equipamento.modelo }}</h4>
+    <span class="text-muted">
+      {% if equipamento.produto %}
+        <span class="badge bg-light text-dark border">{{ equipamento.produto }}</span> ·
+      {% endif %}
+      Patrimônio {{ equipamento.numero_patrimonio }}
+    </span>
+  </div>
+  <div class="text-end">
+    {% if perms.inventario.change_equipamento %}
+      <a href="{% url 'equipamento_editar' equipamento.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
+    {% endif %}
+    {% if perms.inventario.delete_equipamento %}
+      <a href="{% url 'equipamento_excluir' equipamento.pk %}" class="btn btn-sm btn-outline-danger">Excluir</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-5">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="text-uppercase text-muted">Dados do equipamento</h6>
+        <table class="table table-sm mb-0">
+          <tr><th>Produto</th><td>{{ equipamento.produto|default:"—" }}</td></tr>
+          <tr><th>Série</th><td>{{ equipamento.numero_serie|default:"—" }}</td></tr>
+          {% if equipamento.produto.pede_configuracao %}
+            <tr><th>Processador</th><td>{{ equipamento.processador|default:"—" }}</td></tr>
+            <tr><th>Memória RAM</th><td>{{ equipamento.memoria_ram|default:"—" }}</td></tr>
+            <tr><th>Armazenamento</th><td>{{ equipamento.armazenamento|default:"—" }}</td></tr>
+          {% endif %}
+          <tr><th>Local</th><td>{{ equipamento.local|default:"—" }}</td></tr>
+          <tr><th>Status</th><td>{{ equipamento.get_status_display }}</td></tr>
+          <tr><th>Valor de compra</th><td>{% if equipamento.valor_compra %}R$ {{ equipamento.valor_compra }}{% else %}—{% endif %}</td></tr>
+          <tr><th>Data de aquisição</th><td>{{ equipamento.data_aquisicao|date:"d/m/Y"|default:"—" }}</td></tr>
+          <tr><th>Fornecedor</th><td>{{ equipamento.fornecedor|default:"—" }}</td></tr>
+          <tr><th>Observações</th><td>{{ equipamento.observacoes|default:"—"|linebreaksbr }}</td></tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-7">
+    <div class="card shadow-sm mb-3">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <h6 class="text-uppercase text-muted mb-0">Locação</h6>
+          {% if not locacao_ativa and perms.inventario.add_locacao %}
+            <a href="{% url 'locacao_nova' equipamento.pk %}" class="btn btn-sm text-white" style="background:#162D63;">Registrar locação</a>
+          {% endif %}
+        </div>
+        {% if locacao_ativa %}
+          <p class="mb-1"><strong>Cliente:</strong> {{ locacao_ativa.cliente }}</p>
+          <p class="mb-1"><strong>Valor:</strong> R$ {{ locacao_ativa.valor }}</p>
+          <p class="mb-1"><strong>Início:</strong> {{ locacao_ativa.data_inicio|date:"d/m/Y" }}
+             {% if locacao_ativa.data_fim %}· <strong>Término:</strong> {{ locacao_ativa.data_fim|date:"d/m/Y" }}{% endif %}</p>
+          <p class="mb-1"><strong>Contrato:</strong>
+            {% if locacao_ativa.contrato %}
+              <a href="{% url 'contrato_detalhe' locacao_ativa.contrato.pk %}">
+                Nº {{ locacao_ativa.contrato.numero }}</a>
+              {% if locacao_ativa.contrato.arquivo %}
+                · <a href="{{ locacao_ativa.contrato.arquivo.url }}" target="_blank">📄 PDF</a>
+              {% endif %}
+              {% with total=locacao_ativa.contrato.locacoes.count %}
+                {% if total > 1 %}
+                  <span class="badge bg-light text-dark border">{{ total }} máquinas neste contrato</span>
+                {% endif %}
+              {% endwith %}
+            {% else %}
+              <span class="text-muted">sem contrato</span>
+            {% endif %}
+          </p>
+
+          {# --- Vincular a um contrato que já existe deste cliente --- #}
+          {% if perms.inventario.change_locacao %}
+            {% if contratos_do_cliente %}
+            <form method="post" action="{% url 'locacao_vincular_contrato' locacao_ativa.pk %}"
+                  class="border rounded-3 p-2 mt-2" style="background:#f8fafc;">
+              {% csrf_token %}
+              <label class="form-label small text-muted mb-1">
+                {% if locacao_ativa.contrato %}
+                  Trocar por outro contrato de {{ locacao_ativa.cliente }}:
+                {% else %}
+                  Vincular a um contrato que já existe de {{ locacao_ativa.cliente }}:
+                {% endif %}
+              </label>
+              <div class="d-flex gap-2">
+                <select name="contrato" class="form-select form-select-sm" required>
+                  <option value="">— escolha o contrato —</option>
+                  {% for c in contratos_do_cliente %}
+                    <option value="{{ c.pk }}">
+                      Nº {{ c.numero }} · {{ c.data_contrato|date:"d/m/Y" }}{% if c.qtd_maquinas %} · {{ c.qtd_maquinas }} máquina(s){% endif %}
+                    </option>
+                  {% endfor %}
+                </select>
+                <button class="btn btn-sm text-white text-nowrap" style="background:#162D63;">Vincular</button>
+              </div>
+            </form>
+            {% endif %}
+
+            {% if not locacao_ativa.contrato and perms.inventario.add_contrato %}
+              <p class="mb-0 mt-2">
+                {% if contratos_do_cliente %}<span class="text-muted small">ou </span>{% endif %}
+                <a href="{% url 'contrato_novo' %}?locacao={{ locacao_ativa.pk }}"
+                   class="btn btn-sm btn-outline-primary py-0">📎 Criar contrato novo</a>
+              </p>
+            {% endif %}
+          {% endif %}
+          {% if perms.inventario.change_locacao %}
+            <form method="post" action="{% url 'locacao_encerrar' locacao_ativa.pk %}" class="mt-2">
+              {% csrf_token %}
+              <button class="btn btn-sm btn-outline-success">Registrar devolução</button>
+            </form>
+          {% endif %}
+        {% else %}
+          <p class="text-muted mb-0">Equipamento não está locado no momento.</p>
+        {% endif %}
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div class="d-flex align-items-center gap-2">
+            <h6 class="text-uppercase text-muted mb-0">Manutenções</h6>
+            {% with nivel=equipamento.nivel_problema %}
+            <span class="badge rounded-pill d-inline-flex align-items-center gap-1"
+                  style="background:{{ nivel.cor }};color:#fff;"
+                  title="{{ nivel.qtd }} manutenção(ões) registrada(s)">
+              <span class="d-inline-block rounded-circle bg-white" style="width:8px;height:8px;"></span>
+              {{ nivel.rotulo }} · {{ nivel.qtd }}
+            </span>
+            {% endwith %}
+          </div>
+          {% if perms.inventario.add_manutencao %}
+            <a href="{% url 'manutencao_nova' equipamento.pk %}" class="btn btn-sm text-white" style="background:#EA580C;">Registrar manutenção</a>
+          {% endif %}
+        </div>
+        {% if manutencoes %}
+          <ul class="list-group list-group-flush">
+            {% for m in manutencoes %}
+            <li class="list-group-item px-0">
+              <strong>{{ m.data|date:"d/m/Y" }}</strong> — {{ m.descricao }}
+              {% if m.custo %}<span class="text-muted">(R$ {{ m.custo }})</span>{% endif %}
+              {% if m.tecnico %}<br><small class="text-muted">Técnico: {{ m.tecnico }}</small>{% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="text-muted mb-0">Nenhuma manutenção registrada.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mt-3">
+  <div class="card-body">
+    <h6 class="text-uppercase text-muted">Histórico de movimentações</h6>
+    {% if movimentacoes %}
+      <ul class="list-group list-group-flush">
+        {% for mov in movimentacoes %}
+        <li class="list-group-item px-0 d-flex justify-content-between">
+          <span><span class="badge bg-light text-dark border me-2">{{ mov.get_tipo_display }}</span>{{ mov.descricao }}</span>
+          <small class="text-muted">{{ mov.data|date:"d/m/Y H:i" }}{% if mov.usuario %} · {{ mov.usuario.get_username }}{% endif %}</small>
+        </li>
+        {% endfor %}
+      </ul>
+    {% else %}
+      <p class="text-muted mb-0">Sem movimentações.</p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
