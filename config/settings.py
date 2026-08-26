@@ -107,10 +107,10 @@ else:
             'ENGINE': 'django.db.backends.sqlite3',
             'NAME': BASE_DIR / 'db.sqlite3',
             'OPTIONS': {
-                # WAL permite leituras e escritas simultâneas sem travar o
-                # banco inteiro; timeout maior evita erro "database is
-                # locked" quando várias pessoas usam o sistema ao mesmo tempo.
-                'init_command': 'PRAGMA journal_mode=wal; PRAGMA synchronous=NORMAL;',
+                # timeout maior evita erro "database is locked" quando várias
+                # pessoas usam o sistema ao mesmo tempo. O modo WAL em si é
+                # ativado via signal em inventario/apps.py (mais compatível
+                # entre versões do que a opção 'init_command').
                 'timeout': 20,
             },
         }
