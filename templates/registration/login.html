@@ -19,8 +19,26 @@
             <input type="text" name="username" class="form-control" autofocus required>
           </div>
           <div class="mb-3">
-            <label class="form-label">Senha</label>
-            <input type="password" name="password" class="form-control" required>
+            <label class="form-label" for="senha">Senha</label>
+            <div class="input-group">
+              <input type="password" name="password" id="senha" class="form-control border-end-0" required>
+              <button type="button" id="ver-senha" class="btn btn-outline-secondary border-start-0 bg-white text-secondary"
+                      aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha" tabindex="-1">
+                <!-- olho aberto: senha escondida, clique para mostrar -->
+                <svg id="icone-mostrar" xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                     viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                  <path d="M16 8s-3-5.5-8-5.5S0 8 0 8s3 5.5 8 5.5S16 8 16 8M1.173 8a13 13 0 0 1 1.66-2.043C4.12 4.668 5.88 3.5 8 3.5s3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755C11.879 11.332 10.119 12.5 8 12.5s-3.879-1.168-5.168-2.457A13 13 0 0 1 1.172 8z"/>
+                  <path d="M8 5.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5M4.5 8a3.5 3.5 0 1 1 7 0 3.5 3.5 0 0 1-7 0"/>
+                </svg>
+                <!-- olho cortado: senha à mostra, clique para esconder -->
+                <svg id="icone-ocultar" xmlns="http://www.w3.org/2000/svg" width="18" height="18"
+                     viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" hidden>
+                  <path d="M13.359 11.238C15.06 9.72 16 8 16 8s-3-5.5-8-5.5a7 7 0 0 0-2.79.588l.77.771A6 6 0 0 1 8 3.5c2.12 0 3.879 1.168 5.168 2.457A13 13 0 0 1 14.828 8q-.086.13-.195.288c-.335.48-.83 1.12-1.465 1.755q-.247.248-.517.486z"/>
+                  <path d="M11.297 9.176a3.5 3.5 0 0 0-4.474-4.474l.823.823a2.5 2.5 0 0 1 2.829 2.829zm-2.943 1.299.822.822a3.5 3.5 0 0 1-4.474-4.474l.823.823a2.5 2.5 0 0 0 2.829 2.829"/>
+                  <path d="M3.35 5.47q-.27.24-.518.487A13 13 0 0 0 1.172 8l.195.288c.335.48.83 1.12 1.465 1.755C4.121 11.332 5.881 12.5 8 12.5c.716 0 1.39-.133 2.02-.36l.77.772A7 7 0 0 1 8 13.5C3 13.5 0 8 0 8s.939-1.721 2.641-3.238zm10.296 8.884-12-12 .708-.708 12 12z"/>
+                </svg>
+              </button>
+            </div>
           </div>
           <button type="submit" class="btn w-100 text-white" style="background:#16A34A;">Entrar</button>
         </form>
@@ -28,4 +46,36 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Olho do campo de senha: alterna entre senha oculta e visível sem perder o
+// que já foi digitado nem a posição do cursor.
+(function () {
+  const campo = document.getElementById('senha');
+  const botao = document.getElementById('ver-senha');
+  const iconeMostrar = document.getElementById('icone-mostrar');
+  const iconeOcultar = document.getElementById('icone-ocultar');
+  if (!campo || !botao) return;
+
+  botao.addEventListener('click', function () {
+    const mostrando = campo.type === 'text';
+    const cursor = campo.selectionStart;
+
+    campo.type = mostrando ? 'password' : 'text';
+    iconeMostrar.hidden = !mostrando;
+    iconeOcultar.hidden = mostrando;
+
+    const rotulo = mostrando ? 'Mostrar senha' : 'Ocultar senha';
+    botao.setAttribute('aria-label', rotulo);
+    botao.setAttribute('title', rotulo);
+    botao.setAttribute('aria-pressed', mostrando ? 'false' : 'true');
+
+    // Devolve o foco ao campo, com o cursor onde estava
+    campo.focus();
+    if (cursor !== null) campo.setSelectionRange(cursor, cursor);
+  });
+})();
+</script>
 {% endblock %}

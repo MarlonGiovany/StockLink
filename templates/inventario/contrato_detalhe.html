@@ -9,8 +9,8 @@
     <span class="text-muted">{{ contrato.titulo|default:"" }}</span>
   </div>
   <div class="text-end">
-    {% if contrato.arquivo %}
-      <a href="{{ contrato.arquivo.url }}" target="_blank" class="btn btn-sm btn-outline-danger">📄 Abrir PDF</a>
+    {% if contrato.arquivo and pode_ver_pdfs %}
+      <a href="{% url 'contrato_pdf' contrato.pk %}" target="_blank" class="btn btn-sm btn-outline-danger">📄 Abrir PDF</a>
     {% endif %}
     {% if perms.inventario.change_contrato %}
       <a href="{% url 'contrato_editar' contrato.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
@@ -119,7 +119,7 @@
               <td class="text-end">{% if a.valor %}R$ {{ a.valor|floatformat:2 }}{% else %}—{% endif %}</td>
               <td>{{ a.data|date:"d/m/Y" }}</td>
               <td>
-                {% if a.arquivo %}<a href="{{ a.arquivo.url }}" target="_blank">📄</a>{% else %}—{% endif %}
+                {% if a.arquivo and pode_ver_pdfs %}<a href="{% url 'aditivo_pdf' a.pk %}" target="_blank">📄</a>{% else %}—{% endif %}
               </td>
               <td class="text-end">
                 {% if perms.inventario.delete_aditivo and a.id == ultimo_aditivo_id %}

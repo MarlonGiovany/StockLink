@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block titulo %}Histórico por técnico — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+  <div>
+    <a href="{% url 'chamado_lista' %}" class="text-decoration-none small">← Painel de chamados</a>
+    <h4 class="mb-0 mt-1">Histórico por técnico
+      <span class="text-muted fs-6">({{ total }} chamado{{ total|pluralize }})</span>
+    </h4>
+  </div>
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-4">
+  <div class="col-md-3">
+    <label class="form-label small text-muted mb-1">Técnico</label>
+    <select name="tecnico" class="form-select">
+      <option value="">Todos</option>
+      {% for t in tecnicos %}
+        <option value="{{ t.pk }}" {% if tecnico == t.pk|stringformat:"s" %}selected{% endif %}>
+          {{ t.get_username }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-3">
+    <label class="form-label small text-muted mb-1">Status</label>
+    <select name="status" class="form-select">
+      <option value="">Todos</option>
+      {% for valor, rotulo in status_choices %}
+        <option value="{{ valor }}" {% if status == valor %}selected{% endif %}>{{ rotulo }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small text-muted mb-1">De</label>
+    <input type="date" name="de" value="{{ de }}" class="form-control">
+  </div>
+  <div class="col-md-2">
+    <label class="form-label small text-muted mb-1">Até</label>
+    <input type="date" name="ate" value="{{ ate }}" class="form-control">
+  </div>
+  <div class="col-md-2">
+    <button class="btn btn-primary w-100">Filtrar</button>
+  </div>
+</form>
+
+{% for linha in linhas %}
+<div class="card shadow-sm mb-4">
+  <div class="card-body pb-2">
+    <div class="d-flex flex-wrap justify-content-between align-items-center">
+      <h5 class="mb-0">👤 {{ linha.nome }}</h5>
+      <div class="d-flex flex-wrap gap-2">
+        <span class="badge bg-light text-dark border">{{ linha.total }} chamado{{ linha.total|pluralize }}</span>
+        <span class="badge" style="background:#DC2626;">{{ linha.abertos }} aberto{{ linha.abertos|pluralize }}</span>
+        <span class="badge" style="background:#16A34A;">{{ linha.encerrados }} encerrado{{ linha.encerrados|pluralize }}</span>
+        <span class="badge bg-light text-dark border">tempo total: {{ linha.tempo_total }}</span>
+        <span class="badge bg-light text-dark border">média: {{ linha.tempo_medio }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="table-responsive">
+    <table class="table table-sm table-hover align-middle mb-0">
+      <thead class="table-light">
+        <tr>
+          <th>OS</th>
+          <th>Urgência</th>
+          <th>Dia</th>
+          <th>Abertura</th>
+          <th>Encerramento</th>
+          <th>Tempo</th>
+          <th>Cliente</th>
+          <th>Máquina</th>
+          <th>O que foi feito</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in linha.chamados %}
+        <tr>
+          <td class="fw-bold">{{ c.numero_os }}</td>
+          <td>
+            <span class="badge text-nowrap"
+                  style="background:{{ c.alerta.cor }};color:{{ c.alerta.texto }};">
+              {{ c.alerta.rotulo }}
+            </span>
+          </td>
+          <td class="text-nowrap">{{ c.aberto_em|date:"d/m/Y" }}</td>
+          <td class="text-nowrap">{{ c.aberto_em|date:"H:i" }}</td>
+          <td class="text-nowrap">
+            {% if c.encerrado %}
+              {{ c.encerrado_em|date:"H:i" }}
+              {% if c.encerrado_em|date:"d/m/Y" != c.aberto_em|date:"d/m/Y" %}
+                <span class="small text-muted">({{ c.encerrado_em|date:"d/m" }})</span>
+              {% endif %}
+            {% else %}
+              <span class="badge" style="background:#DC2626;">em aberto</span>
+            {% endif %}
+          </td>
+          <td class="text-nowrap">
+            {% if c.encerrado %}{{ c.duracao_texto }}{% else %}
+              <span class="text-muted">há {{ c.tempo_aberto_texto }}</span>
+            {% endif %}
+          </td>
+          <td>{% if c.cliente %}{{ c.cliente|truncatechars:28 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="text-nowrap">Pat. {{ c.equipamento.numero_patrimonio }}</td>
+          <td>
+            {% if c.encerrado %}
+              {{ c.realizado|truncatechars:60 }}
+            {% else %}
+              <span class="text-muted">{{ c.descricao|truncatechars:60 }}</span>
+            {% endif %}
+          </td>
+          <td class="text-end">
+            <a href="{% url 'chamado_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary py-0">OS</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% empty %}
+<div class="card shadow-sm">
+  <div class="card-body text-center text-muted py-5">
+    Nenhum chamado no período escolhido.
+  </div>
+</div>
+{% endfor %}
+
+{% endblock %}

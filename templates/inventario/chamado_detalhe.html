@@ -1,0 +1,141 @@
+{% extends "base.html" %}
+{% block titulo %}OS {{ chamado.numero_os }} — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="d-flex justify-content-between align-items-start mb-3">
+  <div>
+    <a href="{% url 'chamado_lista' %}" class="text-decoration-none small">← Painel de chamados</a>
+    <h4 class="mb-0 mt-1">Ordem de Serviço {{ chamado.numero_os }}</h4>
+  </div>
+  <div class="d-flex gap-2">
+    <span class="badge fs-6"
+          style="background:{{ chamado.alerta.cor }};color:{{ chamado.alerta.texto }};">
+      {{ chamado.alerta.icone }} {{ chamado.alerta.rotulo }}
+    </span>
+    {% if chamado.encerrado %}
+      <span class="badge fs-6" style="background:#16A34A;">Encerrado</span>
+    {% else %}
+      <span class="badge fs-6" style="background:#DC2626;">Aberto</span>
+    {% endif %}
+  </div>
+</div>
+
+{% if chamado.urgente and not chamado.encerrado %}
+  <div class="alert d-flex align-items-center gap-2"
+       style="background:#FEE2E2;border:1px solid #DC2626;color:#7F1D1D;">
+    <span style="font-size:1.4rem;line-height:1;">🔴</span>
+    <div><strong>Chamado urgente.</strong> Aberto há {{ chamado.tempo_aberto_texto }} e ainda sem encerramento.</div>
+  </div>
+{% endif %}
+
+<div class="row g-3">
+
+  {# ---------- Abertura: o que a recepção preencheu ---------- #}
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="text-uppercase text-muted mb-3">Abertura</h6>
+
+        <p class="mb-2">
+          <strong>Data e hora:</strong>
+          {{ chamado.aberto_em|date:"d/m/Y" }} às {{ chamado.aberto_em|date:"H:i" }}
+        </p>
+
+        <p class="mb-2">
+          <strong>Cliente:</strong>
+          {% if chamado.cliente %}{{ chamado.cliente }}
+          {% else %}<span class="text-muted">— não informado —</span>{% endif %}
+        </p>
+
+        <div class="mb-2">
+          <strong>Máquina:</strong>
+          <a href="{% url 'equipamento_detalhe' chamado.equipamento.pk %}">
+            Pat. {{ chamado.equipamento.numero_patrimonio }}
+          </a>
+          <div class="small text-muted">
+            {% if chamado.equipamento.produto %}{{ chamado.equipamento.produto }} · {% endif %}
+            {{ chamado.equipamento.marca }} {{ chamado.equipamento.modelo }}
+            {% if chamado.equipamento.local %} · {{ chamado.equipamento.local }}{% endif %}
+          </div>
+        </div>
+
+        <p class="mb-2">
+          <strong>Técnico designado:</strong>
+          {% if chamado.tecnico %}{{ chamado.tecnico.get_username }}{% else %}—{% endif %}
+        </p>
+
+        {% if chamado.solicitante %}
+          <p class="mb-2"><strong>Quem pediu:</strong> {{ chamado.solicitante }}</p>
+        {% endif %}
+
+        <p class="mb-2">
+          <strong>Aberto por:</strong>
+          {% if chamado.aberto_por %}{{ chamado.aberto_por.get_username }}{% else %}—{% endif %}
+        </p>
+
+        <hr>
+        <strong>O que deve ser feito</strong>
+        <p class="mb-0 mt-1" style="white-space:pre-wrap;">{{ chamado.descricao }}</p>
+      </div>
+    </div>
+  </div>
+
+  {# ---------- Execução: o que o técnico registrou ---------- #}
+  <div class="col-lg-6">
+    <div class="card shadow-sm h-100">
+      <div class="card-body">
+        <h6 class="text-uppercase text-muted mb-3">Execução</h6>
+
+        {% if chamado.encerrado %}
+          <p class="mb-2">
+            <strong>Encerrado em:</strong>
+            {{ chamado.encerrado_em|date:"d/m/Y" }} às {{ chamado.encerrado_em|date:"H:i:s" }}
+          </p>
+          <p class="mb-2">
+            <strong>Encerrado por:</strong>
+            {% if chamado.encerrado_por %}{{ chamado.encerrado_por.get_username }}{% else %}—{% endif %}
+          </p>
+          <p class="mb-3">
+            <strong>Tempo até o encerramento:</strong>
+            <span class="badge bg-light text-dark border fs-6">{{ chamado.duracao_texto }}</span>
+          </p>
+
+          <hr>
+          <strong>O que foi realizado</strong>
+          <p class="mb-0 mt-1" style="white-space:pre-wrap;">{{ chamado.realizado }}</p>
+
+        {% else %}
+          <p class="text-muted">
+            Chamado aberto há <strong>{{ chamado.tempo_aberto_texto }}</strong>.
+            O encerramento grava a data e a hora exatas automaticamente.
+          </p>
+
+          {% if pode_encerrar %}
+            <form method="post" novalidate>
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label" for="{{ form.realizado.id_for_label }}">
+                  {{ form.realizado.label }}
+                </label>
+                {{ form.realizado }}
+                {% for erro in form.realizado.errors %}
+                  <div class="text-danger small">{{ erro }}</div>
+                {% endfor %}
+              </div>
+              <button type="submit" class="btn text-white w-100" style="background:#16A34A;">
+                Encerrar chamado
+              </button>
+            </form>
+          {% else %}
+            <div class="alert alert-secondary mb-0">
+              Você não tem permissão para encerrar chamados.
+            </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+
+{% endblock %}

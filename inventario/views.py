@@ -1,15 +1,22 @@
 import json
+import os
+from datetime import timedelta
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
-from django.db.models import Count, Max, Q
-from django.http import JsonResponse
+from django.contrib.auth.models import Permission
+from django.core.exceptions import PermissionDenied
+from django.db.models import Case, Count, IntegerField, Max, Q, Value, When
+from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
 
 from .forms import (
     AditivoForm,
+    ChamadoAberturaForm,
+    ChamadoEncerramentoForm,
     ClienteForm,
     ContratoForm,
     EquipamentoForm,
@@ -20,6 +27,7 @@ from .forms import (
 )
 from .models import (
     Aditivo,
+    Chamado,
     Cliente,
     Contrato,
     Equipamento,
@@ -27,6 +35,15 @@ from .models import (
     Locacao,
     Movimentacao,
     Produto,
+    formata_duracao,
+)
+from .permissoes import (
+    AREAS,
+    VER_CONTRATOS,
+    VER_PDFS,
+    exige_admin,
+    exige_area,
+    usuario_owner,
 )
 
 
@@ -467,6 +484,7 @@ ORDENS_CONTRATO = {
 
 
 @login_required
+@exige_area(VER_CONTRATOS)
 def contrato_lista(request):
     termo = request.GET.get("q", "").strip()
     ordenar = request.GET.get("ordenar", "data_desc")
@@ -505,6 +523,7 @@ def contrato_lista(request):
 
 @login_required
 @permission_required("inventario.add_contrato", raise_exception=True)
+@exige_area(VER_CONTRATOS)
 def contrato_novo(request):
     # Quando vem da ficha de um equipamento locado (?locacao=<pk>),
     # já puxamos o cliente/equipamento e vinculamos o contrato à locação.
@@ -544,6 +563,7 @@ def contrato_novo(request):
 
 @login_required
 @permission_required("inventario.change_contrato", raise_exception=True)
+@exige_area(VER_CONTRATOS)
 def contrato_editar(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
     if request.method == "POST":
@@ -562,6 +582,7 @@ def contrato_editar(request, pk):
 
 @login_required
 @permission_required("inventario.delete_contrato", raise_exception=True)
+@exige_area(VER_CONTRATOS)
 def contrato_excluir(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
     if request.method == "POST":
@@ -577,6 +598,7 @@ def contrato_excluir(request, pk):
 
 
 @login_required
+@exige_area(VER_CONTRATOS)
 def contrato_detalhe(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
     aditivos = list(contrato.aditivos.all())
@@ -598,6 +620,7 @@ def contrato_detalhe(request, pk):
 
 @login_required
 @permission_required("inventario.add_aditivo", raise_exception=True)
+@exige_area(VER_CONTRATOS)
 def aditivo_novo(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
     if request.method == "POST":
@@ -621,6 +644,7 @@ def aditivo_novo(request, pk):
 
 @login_required
 @permission_required("inventario.delete_aditivo", raise_exception=True)
+@exige_area(VER_CONTRATOS)
 def aditivo_excluir(request, pk):
     aditivo = get_object_or_404(Aditivo, pk=pk)
     contrato = aditivo.contrato
@@ -643,3 +667,311 @@ def aditivo_excluir(request, pk):
         request, "inventario/aditivo_excluir.html",
         {"aditivo": aditivo, "contrato": contrato},
     )
+
+
+# ----- PDFs anexados (área restrita) -----
+
+def _entregar_pdf(arquivo):
+    """Devolve o PDF para abrir no navegador.
+
+    Os PDFs não ficam mais numa URL pública: quem quiser abrir passa por aqui
+    e o Django confere a permissão antes de entregar o arquivo.
+    """
+    if not arquivo:
+        raise Http404("Nenhum PDF anexado.")
+    try:
+        return FileResponse(
+            arquivo.open("rb"),
+            content_type="application/pdf",
+            filename=os.path.basename(arquivo.name),
+        )
+    except FileNotFoundError:
+        raise Http404("O arquivo não está mais na pasta media.")
+
+
+@login_required
+@exige_area(VER_PDFS)
+def contrato_pdf(request, pk):
+    contrato = get_object_or_404(Contrato, pk=pk)
+    return _entregar_pdf(contrato.arquivo)
+
+
+@login_required
+@exige_area(VER_PDFS)
+def aditivo_pdf(request, pk):
+    aditivo = get_object_or_404(Aditivo, pk=pk)
+    return _entregar_pdf(aditivo.arquivo)
+
+
+# ----- Usuários e permissões (só o owner) -----
+
+@login_required
+@exige_admin
+def permissoes_usuarios(request):
+    """Tela onde o owner libera as áreas restritas para cada usuário.
+
+    O owner não aparece na lista de propósito: ele enxerga tudo e não teria
+    como se tirar do próprio acesso.
+    """
+    owner = usuario_owner()
+    usuarios = (
+        get_user_model().objects
+        .exclude(pk=owner.pk)
+        .prefetch_related("user_permissions", "groups__permissions")
+        .order_by("username")
+    )
+    permissoes = {
+        codigo: Permission.objects.get(
+            content_type__app_label="inventario", codename=codigo
+        )
+        for codigo, _, _ in AREAS
+    }
+
+    if request.method == "POST":
+        alterados = 0
+        for usuario in usuarios:
+            for codigo, _, _ in AREAS:
+                marcado = f"{codigo}_{usuario.pk}" in request.POST
+                tinha = permissoes[codigo] in usuario.user_permissions.all()
+                if marcado and not tinha:
+                    usuario.user_permissions.add(permissoes[codigo])
+                    alterados += 1
+                elif not marcado and tinha:
+                    usuario.user_permissions.remove(permissoes[codigo])
+                    alterados += 1
+        if alterados:
+            messages.success(request, "Permissões salvas.")
+        else:
+            messages.info(request, "Nada mudou nas permissões.")
+        return redirect("permissoes_usuarios")
+
+    # Monta a tabela: uma linha por usuário, uma coluna por área
+    linhas = []
+    for usuario in usuarios:
+        do_grupo = {
+            p.codename
+            for grupo in usuario.groups.all()
+            for p in grupo.permissions.all()
+        }
+        diretas = {p.codename for p in usuario.user_permissions.all()}
+        linhas.append({
+            "usuario": usuario,
+            "areas": [
+                {
+                    "codigo": codigo,
+                    "marcado": codigo in diretas,
+                    "via_grupo": codigo in do_grupo,
+                }
+                for codigo, _, _ in AREAS
+            ],
+        })
+
+    return render(
+        request, "inventario/permissoes.html",
+        {"owner": owner, "linhas": linhas, "areas": AREAS},
+    )
+
+
+# ----- Chamados e Ordem de Serviço -----
+
+def _chamados_filtrados(request):
+    """Aplica os filtros do painel de chamados e do histórico.
+
+    Devolve (queryset, filtros) — `filtros` volta para o template deixar os
+    campos preenchidos do jeito que o usuário escolheu.
+    """
+    status = request.GET.get("status", "").strip()
+    tecnico_id = request.GET.get("tecnico", "").strip()
+    de = request.GET.get("de", "").strip()
+    ate = request.GET.get("ate", "").strip()
+
+    chamados = Chamado.objects.select_related(
+        "equipamento", "equipamento__produto", "tecnico", "cliente",
+        "aberto_por", "encerrado_por",
+    )
+    if status:
+        chamados = chamados.filter(status=status)
+    if tecnico_id:
+        chamados = chamados.filter(tecnico_id=tecnico_id)
+    if de:
+        chamados = chamados.filter(aberto_em__date__gte=de)
+    if ate:
+        chamados = chamados.filter(aberto_em__date__lte=ate)
+
+    filtros = {
+        "status": status,
+        "tecnico": tecnico_id,
+        "de": de,
+        "ate": ate,
+        "status_choices": Chamado.Status.choices,
+        "tecnicos": get_user_model().objects
+            .filter(chamados_designados__isnull=False)
+            .distinct().order_by("username"),
+    }
+    return chamados, filtros
+
+
+@login_required
+def chamado_lista(request):
+    """Painel de chamados: tudo que a recepção abriu, com filtros."""
+    chamados, filtros = _chamados_filtrados(request)
+    contexto = {
+        "chamados": chamados,
+        "total": chamados.count(),
+        "abertos": Chamado.objects.filter(status=Chamado.Status.ABERTO).count(),
+    }
+    contexto.update(filtros)
+    return render(request, "inventario/chamado_lista.html", contexto)
+
+
+@login_required
+@permission_required("inventario.add_chamado", raise_exception=True)
+def chamado_novo(request):
+    """Abertura do chamado na recepção.
+
+    A hora de abertura é a hora em que este formulário é salvo — o campo
+    `aberto_em` é preenchido sozinho (auto_now_add), ninguém digita.
+    """
+    if request.method == "POST":
+        form = ChamadoAberturaForm(request.POST)
+        if form.is_valid():
+            chamado = form.save(commit=False)
+            chamado.aberto_por = request.user
+            chamado.save()
+            messages.success(
+                request,
+                f"Chamado aberto — Ordem de Serviço {chamado.numero_os}.",
+            )
+            return redirect("chamado_detalhe", pk=chamado.pk)
+    else:
+        form = ChamadoAberturaForm()
+    return render(request, "inventario/chamado_form.html", {"form": form})
+
+
+@login_required
+def chamado_detalhe(request, pk):
+    """A Ordem de Serviço: a ficha completa do chamado.
+
+    É aqui que o técnico escreve o que fez e encerra — e o encerramento grava
+    a data e a hora exatas, sem ninguém digitar.
+    """
+    chamado = get_object_or_404(
+        Chamado.objects.select_related(
+            "equipamento", "equipamento__produto", "tecnico", "cliente",
+            "aberto_por", "encerrado_por",
+        ),
+        pk=pk,
+    )
+    pode_encerrar = request.user.has_perm("inventario.change_chamado")
+
+    if request.method == "POST":
+        if not pode_encerrar:
+            raise PermissionDenied
+        if chamado.encerrado:
+            messages.info(request, "Este chamado já está encerrado.")
+            return redirect("chamado_detalhe", pk=chamado.pk)
+        form = ChamadoEncerramentoForm(request.POST, instance=chamado)
+        if form.is_valid():
+            chamado = form.save(commit=False)
+            chamado.status = Chamado.Status.ENCERRADO
+            chamado.encerrado_em = timezone.now()
+            chamado.encerrado_por = request.user
+            chamado.save()
+            messages.success(
+                request,
+                f"Ordem de Serviço {chamado.numero_os} encerrada "
+                f"({chamado.duracao_texto} de atendimento).",
+            )
+            return redirect("chamado_detalhe", pk=chamado.pk)
+    else:
+        form = ChamadoEncerramentoForm(instance=chamado)
+
+    return render(
+        request, "inventario/chamado_detalhe.html",
+        {"chamado": chamado, "form": form, "pode_encerrar": pode_encerrar},
+    )
+
+
+@login_required
+def chamado_painel(request):
+    """Painel da área técnica — a tela que fica no monitor transmitindo.
+
+    Mostra só os chamados em aberto, em letra grande, e se atualiza sozinha.
+    """
+    chamados = (
+        Chamado.objects
+        .filter(status=Chamado.Status.ABERTO)
+        .select_related("equipamento", "equipamento__produto", "tecnico", "cliente")
+        # Urgente na frente, depois normal, depois leve — e dentro de cada
+        # grupo o mais antigo primeiro, que é quem está esperando há mais tempo.
+        .annotate(
+            peso=Case(
+                When(prioridade=Chamado.Prioridade.URGENTE, then=Value(1)),
+                When(prioridade=Chamado.Prioridade.NORMAL, then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            )
+        )
+        .order_by("peso", "aberto_em")
+    )
+    return render(
+        request, "inventario/chamado_painel.html",
+        {
+            "chamados": chamados,
+            "total": chamados.count(),
+            "urgentes": chamados.filter(prioridade=Chamado.Prioridade.URGENTE).count(),
+            "agora": timezone.now(),
+            "segundos_atualizacao": 60,
+        },
+    )
+
+
+@login_required
+def chamado_historico(request):
+    """Histórico por técnico, para o gerente técnico.
+
+    Cada linha mostra a hora que o chamado foi aberto, a hora que foi
+    encerrado e quanto tempo levou. Em cima, o resumo de cada técnico.
+    """
+    chamados, filtros = _chamados_filtrados(request)
+    chamados = chamados.order_by("tecnico__username", "-aberto_em")
+
+    # Junta os chamados por técnico e vai somando o tempo dos encerrados
+    resumo = {}
+    for chamado in chamados:
+        nome = chamado.tecnico.get_username() if chamado.tecnico else "— sem técnico —"
+        dados = resumo.setdefault(nome, {
+            "total": 0, "abertos": 0, "encerrados": 0,
+            "segundos": 0.0, "chamados": [],
+        })
+        dados["total"] += 1
+        dados["chamados"].append(chamado)
+        if chamado.encerrado:
+            dados["encerrados"] += 1
+            if chamado.duracao:
+                dados["segundos"] += chamado.duracao.total_seconds()
+        else:
+            dados["abertos"] += 1
+
+    linhas = []
+    for nome, dados in sorted(resumo.items()):
+        if dados["encerrados"]:
+            total_tempo = formata_duracao(timedelta(seconds=dados["segundos"]))
+            medio = formata_duracao(
+                timedelta(seconds=dados["segundos"] / dados["encerrados"])
+            )
+        else:
+            total_tempo = medio = "—"
+        linhas.append({
+            "nome": nome,
+            "total": dados["total"],
+            "abertos": dados["abertos"],
+            "encerrados": dados["encerrados"],
+            "tempo_total": total_tempo,
+            "tempo_medio": medio,
+            "chamados": dados["chamados"],
+        })
+
+    contexto = {"linhas": linhas, "total": chamados.count()}
+    contexto.update(filtros)
+    return render(request, "inventario/chamado_historico.html", contexto)

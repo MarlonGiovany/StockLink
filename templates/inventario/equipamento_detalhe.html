@@ -68,10 +68,14 @@
              {% if locacao_ativa.data_fim %}· <strong>Término:</strong> {{ locacao_ativa.data_fim|date:"d/m/Y" }}{% endif %}</p>
           <p class="mb-1"><strong>Contrato:</strong>
             {% if locacao_ativa.contrato %}
-              <a href="{% url 'contrato_detalhe' locacao_ativa.contrato.pk %}">
-                Nº {{ locacao_ativa.contrato.numero }}</a>
-              {% if locacao_ativa.contrato.arquivo %}
-                · <a href="{{ locacao_ativa.contrato.arquivo.url }}" target="_blank">📄 PDF</a>
+              {% if pode_ver_contratos %}
+                <a href="{% url 'contrato_detalhe' locacao_ativa.contrato.pk %}">
+                  Nº {{ locacao_ativa.contrato.numero }}</a>
+              {% else %}
+                Nº {{ locacao_ativa.contrato.numero }}
+              {% endif %}
+              {% if locacao_ativa.contrato.arquivo and pode_ver_pdfs %}
+                · <a href="{% url 'contrato_pdf' locacao_ativa.contrato.pk %}" target="_blank">📄 PDF</a>
               {% endif %}
               {% with total=locacao_ativa.contrato.locacoes.count %}
                 {% if total > 1 %}

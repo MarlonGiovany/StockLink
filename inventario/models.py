@@ -233,6 +233,12 @@ class Contrato(models.Model):
         verbose_name = "Contrato"
         verbose_name_plural = "Contratos"
         ordering = ["-data_contrato", "-id"]
+        # Áreas restritas do sistema. Quem concede é o owner (o primeiro
+        # usuário cadastrado), na tela "Usuários e permissões".
+        permissions = [
+            ("ver_contratos", "Pode ver a aba de Contratos"),
+            ("ver_pdfs", "Pode abrir os PDFs anexados"),
+        ]
 
     def __str__(self):
         if self.titulo:
@@ -333,3 +339,156 @@ class Movimentacao(models.Model):
 
     def __str__(self):
         return f"{self.get_tipo_display()} - {self.equipamento} ({self.data:%d/%m/%Y %H:%M})"
+
+
+def formata_duracao(delta):
+    """Transforma uma duração em algo legível: "2h 15min", "8min", "3d 4h"."""
+    if delta is None:
+        return "—"
+    total = int(delta.total_seconds())
+    if total < 60:
+        return "menos de 1min"
+    dias, resto = divmod(total, 86400)
+    horas, resto = divmod(resto, 3600)
+    minutos = resto // 60
+    if dias:
+        return f"{dias}d {horas}h"
+    if horas:
+        return f"{horas}h {minutos:02d}min"
+    return f"{minutos}min"
+
+
+class Chamado(models.Model):
+    """Chamado aberto na recepção e atendido pela área técnica.
+
+    A **Ordem de Serviço** é a própria ficha do chamado: o que a recepção
+    preenche na abertura (máquina, o que fazer, técnico designado) mais o que
+    o técnico registra no encerramento (o que foi feito). O nº da OS é o nº
+    do chamado.
+
+    As duas pontas do tempo são gravadas pelo sistema, não digitadas:
+    `aberto_em` na hora que a recepção salva e `encerrado_em` na hora que o
+    técnico encerra. É disso que sai o tempo de cada atendimento no histórico
+    do gerente técnico.
+    """
+
+    class Status(models.TextChoices):
+        ABERTO = "ABERTO", "Aberto"
+        ENCERRADO = "ENCERRADO", "Encerrado"
+
+    class Prioridade(models.TextChoices):
+        URGENTE = "URGENTE", "Urgente"
+        NORMAL = "NORMAL", "Normal"
+        LEVE = "LEVE", "Leve"
+
+    # Obrigatório no formulário de abertura (é o primeiro campo que a recepção
+    # escolhe), mas aceita vazio no banco: existem chamados antigos e máquinas
+    # sem locação, e travar isso quebraria o histórico já gravado.
+    cliente = models.ForeignKey(
+        Cliente, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="chamados", verbose_name="Cliente",
+    )
+    equipamento = models.ForeignKey(
+        Equipamento, on_delete=models.CASCADE,
+        related_name="chamados", verbose_name="Máquina",
+    )
+    descricao = models.TextField(
+        "O que deve ser feito",
+        help_text="Descreva o problema ou o serviço pedido.",
+    )
+    tecnico = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="chamados_designados", verbose_name="Técnico designado",
+    )
+    solicitante = models.CharField(
+        "Quem pediu", max_length=120, blank=True,
+        help_text="Nome de quem procurou a recepção (opcional).",
+    )
+
+    prioridade = models.CharField(
+        "Urgência", max_length=10, choices=Prioridade.choices,
+        default=Prioridade.NORMAL,
+        help_text="Urgente = parou o trabalho · Normal = do dia · Leve = pode esperar.",
+    )
+    status = models.CharField(
+        "Status", max_length=10, choices=Status.choices, default=Status.ABERTO
+    )
+
+    aberto_em = models.DateTimeField("Aberto em", auto_now_add=True)
+    aberto_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="chamados_abertos", verbose_name="Aberto por",
+    )
+
+    realizado = models.TextField("O que foi realizado", blank=True)
+    encerrado_em = models.DateTimeField("Encerrado em", null=True, blank=True)
+    encerrado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="chamados_encerrados", verbose_name="Encerrado por",
+    )
+
+    class Meta:
+        verbose_name = "Chamado"
+        verbose_name_plural = "Chamados"
+        ordering = ["-aberto_em", "-id"]
+
+    def __str__(self):
+        return f"OS {self.numero_os} — {self.equipamento}"
+
+    @property
+    def numero_os(self):
+        """Nº da Ordem de Serviço, com zeros à esquerda (OS 0042)."""
+        return f"{self.pk:04d}" if self.pk else "—"
+
+    @property
+    def encerrado(self):
+        return self.status == self.Status.ENCERRADO
+
+    @property
+    def alerta(self):
+        """Cores e o rótulo do alerta de urgência, para as telas usarem.
+
+        `ordem` serve para o painel da área técnica colocar os urgentes na
+        frente (1 vem antes de 3).
+        """
+        tabela = {
+            self.Prioridade.URGENTE: {
+                "cor": "#DC2626", "texto": "#FFFFFF", "icone": "🔴",
+                "rotulo": "Urgente", "ordem": 1,
+            },
+            self.Prioridade.NORMAL: {
+                "cor": "#EAB308", "texto": "#1F2937", "icone": "🟡",
+                "rotulo": "Normal", "ordem": 2,
+            },
+            self.Prioridade.LEVE: {
+                "cor": "#16A34A", "texto": "#FFFFFF", "icone": "🟢",
+                "rotulo": "Leve", "ordem": 3,
+            },
+        }
+        return tabela.get(self.prioridade, tabela[self.Prioridade.NORMAL])
+
+    @property
+    def urgente(self):
+        return self.prioridade == self.Prioridade.URGENTE
+
+    @property
+    def duracao(self):
+        """Tempo da abertura até o encerramento. None enquanto está aberto."""
+        if not self.encerrado_em or not self.aberto_em:
+            return None
+        return self.encerrado_em - self.aberto_em
+
+    @property
+    def duracao_texto(self):
+        return formata_duracao(self.duracao)
+
+    @property
+    def tempo_aberto(self):
+        """Há quanto tempo o chamado está aberto (para o painel da área técnica)."""
+        if self.encerrado or not self.aberto_em:
+            return None
+        return timezone.now() - self.aberto_em
+
+    @property
+    def tempo_aberto_texto(self):
+        return formata_duracao(self.tempo_aberto)

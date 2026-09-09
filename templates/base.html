@@ -23,11 +23,26 @@
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="{% url 'equipamento_lista' %}">Equipamentos</a></li>
+                <li class="nav-item"><a class="nav-link" href="{% url 'chamado_lista' %}">Chamados</a></li>
+                {% if pode_ver_contratos %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'contrato_lista' %}">Contratos</a></li>
+                {% endif %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'cliente_lista' %}">Clientes</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'fornecedor_lista' %}">Fornecedores</a></li>
-                {% if user.is_staff %}
-                <li class="nav-item"><a class="nav-link" href="/admin/">Administração</a></li>
+                {% if eh_admin %}
+                <li class="nav-item dropdown">
+                    <a class="nav-link dropdown-toggle" href="#" role="button"
+                       data-bs-toggle="dropdown" aria-expanded="false">Administração</a>
+                    <ul class="dropdown-menu">
+                        <li>
+                            <a class="dropdown-item" href="{% url 'permissoes_usuarios' %}">
+                                Permissões
+                            </a>
+                        </li>
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/admin/">Painel administrativo</a></li>
+                    </ul>
+                </li>
                 {% endif %}
             </ul>
             <span class="navbar-text text-white-50 me-3">Olá, {{ user.get_username }}</span>

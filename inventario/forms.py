@@ -1,7 +1,9 @@
 from django import forms
+from django.contrib.auth import get_user_model
 
 from .models import (
     Aditivo,
+    Chamado,
     Cliente,
     Contrato,
     Equipamento,
@@ -240,3 +242,139 @@ class AditivoForm(BootstrapFormMixin, forms.ModelForm):
         if arquivo and getattr(arquivo, "name", "") and not arquivo.name.lower().endswith(".pdf"):
             raise forms.ValidationError("O aditivo precisa estar em PDF (.pdf).")
         return arquivo
+
+
+class EquipamentoSelect(forms.Select):
+    """Select de máquinas que marca cada opção com o cliente dono.
+
+    O `data-cliente` é o que permite a tela mostrar só as máquinas do cliente
+    escolhido — mesma ideia do select de contratos da locação.
+    """
+
+    def create_option(self, name, value, label, selected, index,
+                      subindex=None, attrs=None):
+        opcao = super().create_option(
+            name, value, label, selected, index, subindex, attrs
+        )
+        equipamento = getattr(value, "instance", None)
+        if equipamento is not None:
+            locacao = equipamento.locacao_ativa
+            opcao["attrs"]["data-cliente"] = locacao.cliente_id if locacao else ""
+        return opcao
+
+
+class EquipamentoChoiceField(forms.ModelChoiceField):
+    """Mostra a máquina do jeito que a recepção reconhece: patrimônio + modelo."""
+
+    widget = EquipamentoSelect
+
+    def label_from_instance(self, obj):
+        produto = f"{obj.produto} — " if obj.produto else ""
+        return f"Pat. {obj.numero_patrimonio} — {produto}{obj.marca} {obj.modelo}"
+
+
+def maquinas_com_cliente():
+    """As máquinas que estão locadas para algum cliente hoje.
+
+    O chamado é sempre da máquina de um cliente, então a lista sai daqui:
+    equipamento com locação **ativa**. Máquina sem locação não aparece.
+    """
+    return (
+        Equipamento.objects
+        .filter(locacoes__ativa=True)
+        .select_related("produto")
+        .distinct()
+        .order_by("numero_patrimonio")
+    )
+
+
+class ChamadoAberturaForm(BootstrapFormMixin, forms.ModelForm):
+    """O que a recepção preenche ao abrir o chamado.
+
+    A ordem dos campos é a ordem de preenchimento: **primeiro o cliente**, e
+    só então a máquina — a lista de máquinas mostra apenas as daquele cliente.
+    A data e a hora de abertura não estão aqui de propósito: quem grava é o
+    sistema, no momento em que o chamado é salvo.
+    """
+
+    equipamento = EquipamentoChoiceField(
+        queryset=Equipamento.objects.none(),
+        label="Máquina",
+        empty_label="— escolha o cliente primeiro —",
+    )
+
+    class Meta:
+        model = Chamado
+        fields = [
+            "cliente", "equipamento", "prioridade",
+            "descricao", "tecnico", "solicitante",
+        ]
+        widgets = {
+            "descricao": forms.Textarea(
+                attrs={"rows": 4,
+                       "placeholder": "Ex.: computador não liga; trocar toner..."}
+            ),
+            "solicitante": forms.TextInput(
+                attrs={"placeholder": "Ex.: Maria, do faturamento"}
+            ),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Só clientes que têm ao menos uma máquina locada — escolher um cliente
+        # sem máquina só levaria a uma lista vazia na linha de baixo.
+        self.fields["cliente"].queryset = (
+            Cliente.objects.filter(locacoes__ativa=True).distinct().order_by("nome")
+        )
+        self.fields["cliente"].required = True
+        self.fields["cliente"].empty_label = "— escolha o cliente —"
+
+        self.fields["equipamento"].queryset = maquinas_com_cliente()
+
+        self.fields["tecnico"].queryset = (
+            get_user_model().objects.filter(is_active=True).order_by("username")
+        )
+        self.fields["tecnico"].required = True
+        self.fields["tecnico"].empty_label = "— escolha o técnico —"
+
+    def clean(self):
+        dados = super().clean()
+        cliente = dados.get("cliente")
+        equipamento = dados.get("equipamento")
+
+        # Trava de segurança: a máquina precisa estar mesmo com aquele cliente,
+        # senão dava para burlar a lista mexendo no HTML da página.
+        if cliente and equipamento:
+            locacao = equipamento.locacao_ativa
+            if not locacao or locacao.cliente_id != cliente.pk:
+                dono = locacao.cliente if locacao else None
+                self.add_error(
+                    "equipamento",
+                    f"A máquina Pat. {equipamento.numero_patrimonio} não está "
+                    f"locada para {cliente}"
+                    + (f" — ela está com {dono}." if dono else "."),
+                )
+        return dados
+
+
+class ChamadoEncerramentoForm(BootstrapFormMixin, forms.ModelForm):
+    """O que o técnico escreve para encerrar a Ordem de Serviço."""
+
+    class Meta:
+        model = Chamado
+        fields = ["realizado"]
+        widgets = {
+            "realizado": forms.Textarea(
+                attrs={"rows": 5,
+                       "placeholder": "Descreva o que foi feito no atendimento."}
+            ),
+        }
+
+    def clean_realizado(self):
+        texto = (self.cleaned_data.get("realizado") or "").strip()
+        if not texto:
+            raise forms.ValidationError(
+                "Escreva o que foi realizado antes de encerrar o chamado."
+            )
+        return texto

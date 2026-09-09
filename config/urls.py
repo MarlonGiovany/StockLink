@@ -1,5 +1,3 @@
-from django.conf import settings
-from django.conf.urls.static import static
 from django.contrib import admin
 from django.contrib.auth import views as auth_views
 from django.urls import include, path
@@ -15,6 +13,7 @@ urlpatterns = [
     path("", include("inventario.urls")),
 ]
 
-# Durante o desenvolvimento, serve os arquivos enviados (PDFs dos contratos)
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
+# A pasta media NÃO é mais servida por URL pública. Os PDFs saem pelas views
+# `contrato_pdf` e `aditivo_pdf`, que conferem a permissão "ver_pdfs" antes de
+# entregar o arquivo — servir /media/ direto aqui deixaria qualquer pessoa com
+# o link abrir o PDF sem passar pela trava.
