@@ -2,6 +2,7 @@ from django.contrib import admin
 
 from .models import (
     Aditivo,
+    Chamado,
     Cliente,
     Contrato,
     Equipamento,
@@ -115,3 +116,23 @@ class MovimentacaoAdmin(admin.ModelAdmin):
     list_filter = ("tipo",)
     search_fields = ("equipamento__numero_patrimonio", "descricao")
     readonly_fields = ("equipamento", "tipo", "descricao", "usuario", "data")
+
+
+@admin.register(Chamado)
+class ChamadoAdmin(admin.ModelAdmin):
+    list_display = (
+        "id", "aberto_em", "prioridade", "cliente", "equipamento", "tecnico",
+        "status", "encerrado_em", "duracao_texto",
+    )
+    list_filter = ("prioridade", "status", "tecnico", "cliente")
+    search_fields = (
+        "equipamento__numero_patrimonio", "descricao", "realizado",
+        "tecnico__username", "solicitante", "cliente__nome",
+    )
+    date_hierarchy = "aberto_em"
+    # As duas pontas do tempo são gravadas pelo sistema — ninguém digita
+    readonly_fields = ("aberto_em", "aberto_por", "encerrado_em", "encerrado_por")
+
+    @admin.display(description="Tempo")
+    def duracao_texto(self, obj):
+        return obj.duracao_texto

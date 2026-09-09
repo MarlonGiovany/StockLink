@@ -27,4 +27,17 @@ urlpatterns = [
     path("contratos/<int:pk>/excluir/", views.contrato_excluir, name="contrato_excluir"),
     path("contratos/<int:pk>/aditivo/", views.aditivo_novo, name="aditivo_novo"),
     path("aditivo/<int:pk>/excluir/", views.aditivo_excluir, name="aditivo_excluir"),
+
+    # PDFs passam pelo Django para a permissão valer (não são mais URL pública)
+    path("contratos/<int:pk>/pdf/", views.contrato_pdf, name="contrato_pdf"),
+    path("aditivo/<int:pk>/pdf/", views.aditivo_pdf, name="aditivo_pdf"),
+
+    path("permissoes/", views.permissoes_usuarios, name="permissoes_usuarios"),
+
+    # Chamados / Ordem de Serviço
+    path("chamados/", views.chamado_lista, name="chamado_lista"),
+    path("chamados/novo/", views.chamado_novo, name="chamado_novo"),
+    path("chamados/painel/", views.chamado_painel, name="chamado_painel"),
+    path("chamados/historico/", views.chamado_historico, name="chamado_historico"),
+    path("chamados/<int:pk>/", views.chamado_detalhe, name="chamado_detalhe"),
 ]

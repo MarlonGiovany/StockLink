@@ -61,8 +61,8 @@
           <td>{{ c.data_contrato|date:"d/m/Y" }}</td>
           <td>{% if c.valor %}R$ {{ c.valor|floatformat:2 }}{% else %}—{% endif %}</td>
           <td>
-            {% if c.arquivo %}
-              <a href="{{ c.arquivo.url }}" target="_blank" class="btn btn-sm btn-outline-danger" title="{{ c.nome_arquivo }}">
+            {% if c.arquivo and pode_ver_pdfs %}
+              <a href="{% url 'contrato_pdf' c.pk %}" target="_blank" class="btn btn-sm btn-outline-danger" title="{{ c.nome_arquivo }}">
                 📄 Abrir
               </a>
             {% else %}—{% endif %}

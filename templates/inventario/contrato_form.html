@@ -19,10 +19,10 @@
         <div class="mb-3">
           <label class="form-label">{{ field.label }}</label>
           {{ field }}
-          {% if field.name == "arquivo" and contrato and contrato.arquivo %}
+          {% if field.name == "arquivo" and contrato and contrato.arquivo and pode_ver_pdfs %}
             <div class="form-text">
               Arquivo atual:
-              <a href="{{ contrato.arquivo.url }}" target="_blank">📄 {{ contrato.nome_arquivo }}</a>
+              <a href="{% url 'contrato_pdf' contrato.pk %}" target="_blank">📄 {{ contrato.nome_arquivo }}</a>
               — envie um novo só se quiser substituir.
             </div>
           {% endif %}

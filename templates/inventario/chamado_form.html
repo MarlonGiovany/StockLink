@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block titulo %}Abrir chamado — StockLink{% endblock %}
+{% block conteudo %}
+
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-body p-4">
+        <h4 class="mb-1">Abrir chamado</h4>
+        <p class="text-muted">
+          Escolha o cliente primeiro — a lista de máquinas mostra só as dele.
+          A data e a hora de abertura são gravadas pelo sistema no momento em
+          que você salvar.
+        </p>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for erro in form.non_field_errors %}{{ erro }}{% endfor %}
+          </div>
+        {% endif %}
+
+        <form method="post" novalidate>
+          {% csrf_token %}
+          {% for field in form %}
+            <div class="mb-3">
+              <label class="form-label" for="{{ field.id_for_label }}">
+                {{ field.label }}
+              </label>
+              {{ field }}
+              {% if field.name == "equipamento" %}
+                <div class="form-text" id="aviso-maquinas"></div>
+              {% elif field.help_text %}
+                <div class="form-text">{{ field.help_text }}</div>
+              {% endif %}
+              {% for erro in field.errors %}
+                <div class="text-danger small">{{ erro }}</div>
+              {% endfor %}
+            </div>
+          {% endfor %}
+
+          <div class="d-flex justify-content-end gap-2">
+            <a href="{% url 'chamado_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn text-white" style="background:#16A34A;">
+              Abrir chamado
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+// A lista de máquinas segue o cliente escolhido: cada <option> de máquina traz
+// o dono em data-cliente, e aqui só ficam de pé as que batem com a seleção.
+(function () {
+  const cliente = document.getElementById('id_cliente');
+  const maquina = document.getElementById('id_equipamento');
+  const aviso = document.getElementById('aviso-maquinas');
+  if (!cliente || !maquina) return;
+
+  // Guarda a lista completa uma vez, porque as opções são removidas do select
+  const todas = Array.from(maquina.options).map(function (o) {
+    return { valor: o.value, texto: o.text, cliente: o.dataset.cliente || '' };
+  });
+  const vazia = todas[0];
+
+  function atualizar(manterEscolha) {
+    const escolhido = cliente.value;
+    const anterior = maquina.value;
+
+    const disponiveis = todas.filter(function (o) {
+      return o.valor !== '' && o.cliente === escolhido;
+    });
+
+    maquina.innerHTML = '';
+    const primeira = document.createElement('option');
+    primeira.value = '';
+    primeira.text = escolhido
+      ? (disponiveis.length ? '— escolha a máquina —' : '— nenhuma máquina neste cliente —')
+      : vazia.texto;
+    maquina.appendChild(primeira);
+
+    disponiveis.forEach(function (o) {
+      const opt = document.createElement('option');
+      opt.value = o.valor;
+      opt.text = o.texto;
+      maquina.appendChild(opt);
+    });
+
+    // Ao recarregar com erro de validação, mantém a máquina que já estava
+    if (manterEscolha && disponiveis.some(function (o) { return o.valor === anterior; })) {
+      maquina.value = anterior;
+    }
+
+    maquina.disabled = !escolhido;
+    if (!escolhido) {
+      aviso.textContent = 'Escolha o cliente para liberar a lista de máquinas.';
+    } else if (disponiveis.length) {
+      aviso.textContent = disponiveis.length + ' máquina(s) locada(s) para este cliente.';
+    } else {
+      aviso.textContent = 'Este cliente não tem máquina locada no momento.';
+    }
+  }
+
+  cliente.addEventListener('change', function () { atualizar(false); });
+  atualizar(true);
+})();
+</script>
+{% endblock %}
