@@ -12,7 +12,18 @@
 </div>
 
 <form method="get" class="row g-2 align-items-end mb-4">
-  <div class="col-md-3">
+  <div class="col-md-4">
+    <label class="form-label small text-muted mb-1">Cliente</label>
+    <select name="cliente" class="form-select">
+      <option value="">Todos</option>
+      {% for cl in clientes %}
+        <option value="{{ cl.pk }}" {% if cliente == cl.pk|stringformat:"s" %}selected{% endif %}>
+          {{ cl.nome }}
+        </option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-md-4">
     <label class="form-label small text-muted mb-1">Técnico</label>
     <select name="tecnico" class="form-select">
       <option value="">Todos</option>
@@ -23,7 +34,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-3">
+  <div class="col-md-4">
     <label class="form-label small text-muted mb-1">Status</label>
     <select name="status" class="form-select">
       <option value="">Todos</option>
@@ -32,17 +43,22 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-2">
+  <div class="col-md-3">
     <label class="form-label small text-muted mb-1">De</label>
     <input type="date" name="de" value="{{ de }}" class="form-control">
   </div>
-  <div class="col-md-2">
+  <div class="col-md-3">
     <label class="form-label small text-muted mb-1">Até</label>
     <input type="date" name="ate" value="{{ ate }}" class="form-control">
   </div>
-  <div class="col-md-2">
+  <div class="col-md-3">
     <button class="btn btn-primary w-100">Filtrar</button>
   </div>
+  {% if cliente or status or tecnico or de or ate %}
+  <div class="col-md-3">
+    <a href="{% url 'chamado_historico' %}" class="btn btn-outline-secondary w-100">Limpar</a>
+  </div>
+  {% endif %}
 </form>
 
 {% for linha in linhas %}

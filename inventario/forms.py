@@ -1,3 +1,5 @@
+from decimal import Decimal
+
 from django import forms
 from django.contrib.auth import get_user_model
 
@@ -193,6 +195,28 @@ class LocacaoForm(BootstrapFormMixin, forms.ModelForm):
         return dados
 
 
+class ValorEmLoteForm(forms.Form):
+    """O valor único que vai ser aplicado às máquinas marcadas.
+
+    Num contrato é comum a frota inteira sair pelo mesmo preço; digitar
+    máquina por máquina era o trabalho que a edição em lote tira.
+    """
+
+    valor = forms.DecimalField(
+        label="Aplicar este valor", max_digits=12, decimal_places=2,
+        min_value=Decimal("0.01"),
+        widget=forms.NumberInput(attrs={
+            "class": "form-control", "step": "0.01", "min": "0.01",
+            "placeholder": "Ex.: 250,00",
+        }),
+        error_messages={
+            "required": "Digite o valor da locação.",
+            "invalid": "Valor inválido — use números, ex.: 250.00",
+            "min_value": "O valor da locação precisa ser maior que zero.",
+        },
+    )
+
+
 class FornecedorForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Fornecedor
@@ -358,16 +382,44 @@ class ChamadoAberturaForm(BootstrapFormMixin, forms.ModelForm):
         return dados
 
 
+# Formatos aceitos na digitalização da OS: o scanner da recepção costuma
+# entregar PDF, mas foto do celular resolve quando o scanner está ocupado.
+EXTENSOES_OS = (".pdf", ".jpg", ".jpeg", ".png")
+
+
+def _valida_arquivo_os(arquivo):
+    if arquivo and getattr(arquivo, "name", ""):
+        if not arquivo.name.lower().endswith(EXTENSOES_OS):
+            raise forms.ValidationError(
+                "A OS digitalizada precisa ser PDF, JPG ou PNG."
+            )
+    return arquivo
+
+
 class ChamadoEncerramentoForm(BootstrapFormMixin, forms.ModelForm):
-    """O que o técnico escreve para encerrar a Ordem de Serviço."""
+    """O que o técnico passa da OS física para o sistema ao encerrar.
+
+    Os campos são os mesmos da folha impressa, na mesma ordem: o que foi
+    feito, se trocou peça, qual peça, observações e a folha digitalizada.
+    """
 
     class Meta:
         model = Chamado
-        fields = ["realizado"]
+        fields = [
+            "realizado", "houve_troca_peca", "peca_substituida",
+            "observacoes", "arquivo_os",
+        ]
         widgets = {
             "realizado": forms.Textarea(
                 attrs={"rows": 5,
                        "placeholder": "Descreva o que foi feito no atendimento."}
+            ),
+            "peca_substituida": forms.TextInput(
+                attrs={"placeholder": "Ex.: Fonte 500W, Toner preto, SSD 240 GB"}
+            ),
+            "observacoes": forms.Textarea(
+                attrs={"rows": 3,
+                       "placeholder": "Outras observações pertinentes (opcional)."}
             ),
         }
 
@@ -378,3 +430,40 @@ class ChamadoEncerramentoForm(BootstrapFormMixin, forms.ModelForm):
                 "Escreva o que foi realizado antes de encerrar o chamado."
             )
         return texto
+
+    def clean_arquivo_os(self):
+        return _valida_arquivo_os(self.cleaned_data.get("arquivo_os"))
+
+    def clean(self):
+        dados = super().clean()
+        # "Sim, trocou peça" sem dizer qual peça não serve de comprovante —
+        # é justamente essa informação que a OS física pede.
+        if dados.get("houve_troca_peca") and not (dados.get("peca_substituida") or "").strip():
+            self.add_error(
+                "peca_substituida",
+                "Diga qual peça foi substituída.",
+            )
+        # Peça escrita com o "houve troca" desmarcado é quase sempre esquecimento
+        # de marcar a caixinha — melhor marcar do que perder o dado.
+        if dados.get("peca_substituida") and not dados.get("houve_troca_peca"):
+            dados["houve_troca_peca"] = True
+        return dados
+
+
+class ChamadoAnexoForm(BootstrapFormMixin, forms.ModelForm):
+    """Anexa (ou troca) a OS digitalizada, inclusive depois do encerramento.
+
+    Existe separado do encerramento porque nem sempre a folha assinada é
+    digitalizada na hora — o scanner pode estar ocupado, e a OS não deve
+    ficar travada esperando por isso.
+    """
+
+    class Meta:
+        model = Chamado
+        fields = ["arquivo_os"]
+
+    def clean_arquivo_os(self):
+        arquivo = _valida_arquivo_os(self.cleaned_data.get("arquivo_os"))
+        if not arquivo:
+            raise forms.ValidationError("Escolha o arquivo digitalizado.")
+        return arquivo

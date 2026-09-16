@@ -1,3 +1,5 @@
+from datetime import timedelta
+
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -250,6 +252,15 @@ class Contrato(models.Model):
         import os
         return os.path.basename(self.arquivo.name) if self.arquivo else ""
 
+    @property
+    def maquinas_ativas(self):
+        """Quantas máquinas o contrato tem **hoje**.
+
+        Locação encerrada (máquina devolvida) continua no histórico do
+        contrato, mas não entra nesta conta — é ela que aparece nas telas.
+        """
+        return self.locacoes.filter(ativa=True).count()
+
 
 class Aditivo(models.Model):
     """Registro de um aditivo (alteração) feito dentro de um contrato.
@@ -381,6 +392,10 @@ class Chamado(models.Model):
         NORMAL = "NORMAL", "Normal"
         LEVE = "LEVE", "Leve"
 
+    # Chamado que passa disto sem encerrar vira alerta de sirene no painel da
+    # área técnica — de 5 em 5 minutos, até alguém encerrar.
+    HORAS_ATE_ATRASO = 24
+
     # Obrigatório no formulário de abertura (é o primeiro campo que a recepção
     # escolhe), mas aceita vazio no banco: existem chamados antigos e máquinas
     # sem locação, e travar isso quebraria o histórico já gravado.
@@ -421,6 +436,23 @@ class Chamado(models.Model):
     )
 
     realizado = models.TextField("O que foi realizado", blank=True)
+
+    # --- O que vem da OS física preenchida pelo técnico no atendimento ---
+    houve_troca_peca = models.BooleanField("Houve troca de peça?", default=False)
+    peca_substituida = models.CharField(
+        "Peça substituída", max_length=200, blank=True,
+        help_text='Ex.: "Fonte 500W", "Toner preto", "SSD 240 GB".',
+    )
+    observacoes = models.TextField("Observações do atendimento", blank=True)
+
+    # A folha assinada, digitalizada. É o comprovante do atendimento: fica
+    # guardada e pode ser anexada depois do encerramento, se o scanner só
+    # estiver disponível mais tarde.
+    arquivo_os = models.FileField(
+        "OS digitalizada (PDF ou imagem)", upload_to="ordens_servico/%Y/",
+        blank=True,
+    )
+
     encerrado_em = models.DateTimeField("Encerrado em", null=True, blank=True)
     encerrado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
@@ -443,6 +475,31 @@ class Chamado(models.Model):
     @property
     def encerrado(self):
         return self.status == self.Status.ENCERRADO
+
+    @property
+    def atrasado(self):
+        """Aberto há mais de 24h e ainda sem encerramento.
+
+        É o que dispara a sirene do painel e deixa o cartão piscando: numa
+        TV transmitindo o painel o dia inteiro, é o que faz alguém olhar.
+        """
+        if self.encerrado or not self.aberto_em:
+            return False
+        return timezone.now() - self.aberto_em >= timedelta(
+            hours=self.HORAS_ATE_ATRASO
+        )
+
+    @property
+    def nome_arquivo_os(self):
+        import os
+        return os.path.basename(self.arquivo_os.name) if self.arquivo_os else ""
+
+    @property
+    def peca_texto(self):
+        """O que mostrar na linha "troca de peça" das telas."""
+        if not self.houve_troca_peca:
+            return "Não houve troca de peça"
+        return self.peca_substituida or "Sim — peça não especificada"
 
     @property
     def alerta(self):

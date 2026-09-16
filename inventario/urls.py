@@ -26,6 +26,8 @@ urlpatterns = [
     path("contratos/<int:pk>/editar/", views.contrato_editar, name="contrato_editar"),
     path("contratos/<int:pk>/excluir/", views.contrato_excluir, name="contrato_excluir"),
     path("contratos/<int:pk>/aditivo/", views.aditivo_novo, name="aditivo_novo"),
+    path("contratos/<int:pk>/valor-em-lote/", views.locacao_valor_em_lote,
+         name="locacao_valor_em_lote"),
     path("aditivo/<int:pk>/excluir/", views.aditivo_excluir, name="aditivo_excluir"),
 
     # PDFs passam pelo Django para a permissão valer (não são mais URL pública)
@@ -38,6 +40,12 @@ urlpatterns = [
     path("chamados/", views.chamado_lista, name="chamado_lista"),
     path("chamados/novo/", views.chamado_novo, name="chamado_novo"),
     path("chamados/painel/", views.chamado_painel, name="chamado_painel"),
+    path("chamados/painel/dados/", views.chamado_painel_dados,
+         name="chamado_painel_dados"),
     path("chamados/historico/", views.chamado_historico, name="chamado_historico"),
     path("chamados/<int:pk>/", views.chamado_detalhe, name="chamado_detalhe"),
+    path("chamados/<int:pk>/imprimir/", views.chamado_imprimir,
+         name="chamado_imprimir"),
+    path("chamados/<int:pk>/arquivo/", views.chamado_arquivo,
+         name="chamado_arquivo"),
 ]

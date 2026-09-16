@@ -77,7 +77,7 @@
               {% if locacao_ativa.contrato.arquivo and pode_ver_pdfs %}
                 · <a href="{% url 'contrato_pdf' locacao_ativa.contrato.pk %}" target="_blank">📄 PDF</a>
               {% endif %}
-              {% with total=locacao_ativa.contrato.locacoes.count %}
+              {% with total=locacao_ativa.contrato.maquinas_ativas %}
                 {% if total > 1 %}
                   <span class="badge bg-light text-dark border">{{ total }} máquinas neste contrato</span>
                 {% endif %}

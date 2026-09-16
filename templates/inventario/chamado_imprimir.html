@@ -1,0 +1,243 @@
+{% comment %}
+A Ordem de Serviço em papel. Não estende o base.html: é uma folha A4, sem menu
+e sem cor de fundo, feita para sair na impressora.
+
+O número impresso aqui é o MESMO número da OS no sistema — é por ele que a
+folha preenchida pelo técnico volta a ser encontrada e anexada à ordem certa.
+A caixa do topo mostra o número em corpo grande justamente para isso.
+{% endcomment %}<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <title>OS {{ chamado.numero_os }} — Ordem de Serviço</title>
+  <style>
+    @page { size: A4; margin: 12mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 11pt;
+           color: #000; margin: 0; background: #fff; }
+
+    .barra-tela { background:#162D63; color:#fff; padding:.6rem 1rem;
+                  display:flex; justify-content:space-between; align-items:center;
+                  font-size:10pt; }
+    .btn-tela { background:#16A34A; color:#fff; border:0; border-radius:4px;
+                padding:.4rem .9rem; cursor:pointer; text-decoration:none;
+                font: inherit; display:inline-block; }
+    .btn-tela.secundario { background:#475569; }
+    @media print { .barra-tela { display: none; } }
+
+    .folha { padding: 4mm 0; }
+
+    .topo { display: flex; justify-content: space-between;
+            align-items: flex-start; border-bottom: 2.5pt solid #000;
+            padding-bottom: 3mm; margin-bottom: 4mm; }
+    .marca { font-size: 17pt; font-weight: bold; letter-spacing: .5pt; }
+    .marca small { display:block; font-size: 9pt; font-weight: normal;
+                   letter-spacing: 0; }
+    .caixa-os { border: 2.5pt solid #000; padding: 2mm 5mm; text-align: center;
+                min-width: 46mm; }
+    .caixa-os .rotulo { font-size: 8.5pt; text-transform: uppercase;
+                        letter-spacing: 1pt; }
+    .caixa-os .numero { font-size: 27pt; font-weight: bold; line-height: 1.05; }
+
+    .urgencia { display:inline-block; border:1.2pt solid #000; padding:.6mm 2.5mm;
+                font-size:9.5pt; font-weight:bold; text-transform:uppercase; }
+
+    h2.secao { font-size: 10.5pt; text-transform: uppercase; letter-spacing: 1pt;
+               background: #E9E9E9; border: 1pt solid #000; margin: 0 0 2mm;
+               padding: 1.2mm 2.5mm; }
+    h2.secao .leve { font-weight: normal; text-transform: none; letter-spacing: 0; }
+
+    .bloco { margin-bottom: 4mm; }
+    /* Layout fixo: sem ele o primeiro valor da linha come a largura toda e
+       a segunda dupla rótulo/valor fica espremida na borda direita. */
+    table.dados { width: 100%; border-collapse: collapse; table-layout: fixed; }
+    table.dados td { border: 1pt solid #000; padding: 1.6mm 2.5mm;
+                     vertical-align: top; font-size: 10.5pt;
+                     overflow-wrap: break-word; }
+    table.dados td.rot { width: 31mm; background: #F4F4F4; font-size: 8.5pt;
+                         text-transform: uppercase; letter-spacing: .4pt; }
+
+    .caixa-texto { border: 1pt solid #000; padding: 2mm 2.5mm; min-height: 20mm;
+                   font-size: 10.5pt; white-space: pre-wrap; }
+
+    /* Linhas para o técnico escrever à mão. */
+    .pauta { border: 1pt solid #000; border-bottom: 0; }
+    .pauta div { border-bottom: 1pt solid #BBB; height: 8mm; }
+    .pauta div:last-child { border-bottom: 1pt solid #000; }
+
+    .quadrinho { display:inline-block; width: 4.5mm; height: 4.5mm;
+                 border: 1.3pt solid #000; vertical-align: -0.8mm;
+                 margin-right: 1.5mm; }
+    .opcoes span.item { margin-right: 12mm; }
+    .linha-peca { border-bottom: 1pt solid #000; display:inline-block;
+                  min-width: 105mm; height: 6mm; }
+
+    .assinaturas { display: flex; gap: 12mm; margin-top: 9mm; }
+    .assinaturas div { flex: 1; text-align: center; }
+    .assinaturas .risco { border-top: 1pt solid #000; margin-bottom: 1.5mm; }
+    .assinaturas .quem { font-size: 9.5pt; }
+    .assinaturas .obs { font-size: 8pt; color: #444; }
+
+    .rodape { margin-top: 6mm; border-top: 1pt solid #999; padding-top: 2mm;
+              font-size: 8pt; color: #444; display:flex;
+              justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+<div class="barra-tela">
+  <span>Ordem de Serviço {{ chamado.numero_os }} — pronta para impressão</span>
+  <span>
+    <a class="btn-tela secundario" href="{% url 'chamado_detalhe' chamado.pk %}">&larr; Voltar para a OS</a>
+    <button class="btn-tela" type="button" onclick="window.print()">🖨️ Imprimir</button>
+  </span>
+</div>
+
+<div class="folha">
+
+  <div class="topo">
+    <div class="marca">
+      📦 StockLink
+      <small>Controle de equipamentos e patrimônio</small>
+      <small style="margin-top:1.5mm;">
+        Urgência: <span class="urgencia">{{ chamado.alerta.rotulo }}</span>
+      </small>
+    </div>
+    <div class="caixa-os">
+      <div class="rotulo">Ordem de Serviço Nº</div>
+      <div class="numero">{{ chamado.numero_os }}</div>
+    </div>
+  </div>
+
+  {# ---------- O que já sai preenchido do sistema ---------- #}
+  <div class="bloco">
+    <h2 class="secao">1 &middot; Abertura</h2>
+    <table class="dados">
+      <tr>
+        <td class="rot">Data / hora</td>
+        <td>{{ chamado.aberto_em|date:"d/m/Y" }} às {{ chamado.aberto_em|date:"H:i" }}</td>
+        <td class="rot">Aberto por</td>
+        <td>{% if chamado.aberto_por %}{{ chamado.aberto_por.get_username }}{% else %}&mdash;{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="rot">Técnico designado</td>
+        <td>{% if chamado.tecnico %}{{ chamado.tecnico.get_username }}{% else %}&mdash;{% endif %}</td>
+        <td class="rot">Quem pediu</td>
+        <td>{{ chamado.solicitante|default:"&mdash;" }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="bloco">
+    <h2 class="secao">2 &middot; Cliente</h2>
+    <table class="dados">
+      <tr>
+        <td class="rot">Nome</td>
+        <td colspan="3">{% if chamado.cliente %}{{ chamado.cliente.nome }}{% else %}&mdash;{% endif %}</td>
+      </tr>
+      <tr>
+        <td class="rot">CPF / CNPJ</td>
+        <td>{{ chamado.cliente.documento|default:"&mdash;" }}</td>
+        <td class="rot">Telefone</td>
+        <td>{{ chamado.cliente.telefone|default:"&mdash;" }}</td>
+      </tr>
+      <tr>
+        <td class="rot">Endereço</td>
+        <td colspan="3">{{ chamado.cliente.endereco|default:"&mdash;" }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="bloco">
+    <h2 class="secao">3 &middot; Equipamento</h2>
+    <table class="dados">
+      <tr>
+        <td class="rot">Patrimônio</td>
+        <td><strong>{{ chamado.equipamento.numero_patrimonio }}</strong></td>
+        <td class="rot">Produto</td>
+        <td>{{ chamado.equipamento.produto|default:"&mdash;" }}</td>
+      </tr>
+      <tr>
+        <td class="rot">Marca / modelo</td>
+        <td>{{ chamado.equipamento.marca }} {{ chamado.equipamento.modelo }}</td>
+        <td class="rot">Nº de série</td>
+        <td>{{ chamado.equipamento.numero_serie|default:"&mdash;" }}</td>
+      </tr>
+      <tr>
+        <td class="rot">Localização</td>
+        <td colspan="3">{{ chamado.equipamento.local|default:"&mdash;" }}</td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="bloco">
+    <h2 class="secao">4 &middot; Problema / solicitação</h2>
+    <div class="caixa-texto">{{ chamado.descricao }}</div>
+  </div>
+
+  {# ---------- O que o técnico preenche à mão, no atendimento ---------- #}
+  <div class="bloco">
+    <h2 class="secao">5 &middot; Serviço realizado <span class="leve">(preencher no atendimento)</span></h2>
+    <div class="pauta">
+      <div></div><div></div><div></div><div></div><div></div><div></div>
+    </div>
+  </div>
+
+  <div class="bloco">
+    <h2 class="secao">6 &middot; Troca de peça</h2>
+    <table class="dados">
+      <tr>
+        <td class="rot">Houve troca?</td>
+        <td class="opcoes">
+          <span class="item"><span class="quadrinho"></span>Sim</span>
+          <span class="item"><span class="quadrinho"></span>Não</span>
+        </td>
+      </tr>
+      <tr>
+        <td class="rot">Peça substituída</td>
+        <td><span class="linha-peca"></span></td>
+      </tr>
+    </table>
+  </div>
+
+  <div class="bloco">
+    <h2 class="secao">7 &middot; Observações</h2>
+    <div class="pauta">
+      <div></div><div></div><div></div>
+    </div>
+  </div>
+
+  <div class="assinaturas">
+    <div>
+      <div class="risco"></div>
+      <div class="quem"><strong>Assinatura do técnico</strong></div>
+      <div class="obs">
+        {% if chamado.tecnico %}{{ chamado.tecnico.get_username }}{% else %}nome legível{% endif %}
+      </div>
+    </div>
+    <div>
+      <div class="risco"></div>
+      <div class="quem"><strong>Assinatura do cliente / acompanhante</strong></div>
+      <div class="obs">nome legível e data</div>
+    </div>
+  </div>
+
+  <div class="rodape">
+    <span>
+      Depois de preenchida e assinada, digitalize esta folha e anexe à
+      <strong>OS {{ chamado.numero_os }}</strong> no StockLink.
+    </span>
+    <span>OS {{ chamado.numero_os }}</span>
+  </div>
+
+</div>
+
+<script>
+  // A recepção abre esta página justamente para imprimir, então já chama a
+  // caixa de impressão. Se a pessoa cancelar, a folha continua na tela e o
+  // botão "Imprimir" da barra do topo chama de novo.
+  window.addEventListener('load', function () { window.print(); });
+</script>
+
+</body>
+</html>

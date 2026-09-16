@@ -10,12 +10,14 @@ from django.core.exceptions import PermissionDenied
 from django.db.models import Case, Count, IntegerField, Max, Q, Value, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
 
 from .forms import (
     AditivoForm,
     ChamadoAberturaForm,
+    ChamadoAnexoForm,
     ChamadoEncerramentoForm,
     ClienteForm,
     ContratoForm,
@@ -24,6 +26,7 @@ from .forms import (
     LocacaoForm,
     ManutencaoForm,
     ProdutoForm,
+    ValorEmLoteForm,
 )
 from .models import (
     Aditivo,
@@ -126,7 +129,9 @@ def equipamento_detalhe(request, pk):
         contratos_do_cliente = (
             Contrato.objects
             .filter(cliente_id=locacao_ativa.cliente_id)
-            .annotate(qtd_maquinas=Count("locacoes"))
+            .annotate(
+                qtd_maquinas=Count("locacoes", filter=Q(locacoes__ativa=True))
+            )
             .order_by("-data_contrato", "-id")
         )
         if locacao_ativa.contrato_id:
@@ -391,7 +396,7 @@ def locacao_vincular_contrato(request, pk):
     messages.success(
         request,
         f"Locação vinculada ao contrato Nº {contrato.numero} "
-        f"({contrato.locacoes.count()} máquina(s) neste contrato).",
+        f"({contrato.maquinas_ativas} máquina(s) neste contrato).",
     )
     return redirect("equipamento_detalhe", pk=equipamento.pk)
 
@@ -450,9 +455,14 @@ def fornecedor_novo(request):
 
 @login_required
 def cliente_lista(request):
+    """Lista de clientes, com busca pelo nome."""
+    termo = request.GET.get("q", "").strip()
+    clientes = Cliente.objects.all()
+    if termo:
+        clientes = clientes.filter(nome__icontains=termo)
     return render(
         request, "inventario/cliente_lista.html",
-        {"clientes": Cliente.objects.all()},
+        {"clientes": clientes, "termo": termo, "total": clientes.count()},
     )
 
 
@@ -493,7 +503,10 @@ def contrato_lista(request):
 
     contratos = (
         Contrato.objects.select_related("cliente")
-        .annotate(qtd_maquinas=Count("locacoes"))
+        # Máquina devolvida (locação encerrada) não entra no total do contrato
+        .annotate(
+            qtd_maquinas=Count("locacoes", filter=Q(locacoes__ativa=True))
+        )
     )
     if termo:
         contratos = contratos.filter(
@@ -519,6 +532,82 @@ def contrato_lista(request):
         "total": contratos.count(),
     }
     return render(request, "inventario/contrato_lista.html", contexto)
+
+
+def _reais(valor):
+    """1250.5 -> "1.250,50" — para as mensagens saírem no padrão brasileiro."""
+    return f"{valor:,.2f}".replace(",", "@").replace(".", ",").replace("@", ".")
+
+
+@login_required
+@permission_required("inventario.change_locacao", raise_exception=True)
+@exige_area(VER_CONTRATOS)
+def locacao_valor_em_lote(request, pk):
+    """Aplica um mesmo valor de locação a várias máquinas do contrato de uma vez.
+
+    Só mexe nas locações **ativas deste contrato**: a lista de ids vem do
+    formulário, mas é filtrada pelo contrato aqui no servidor — senão daria
+    para alterar a locação de outro cliente mexendo no HTML da página. E
+    locação encerrada fica de fora porque é registro histórico.
+
+    Cada máquina alterada ganha uma linha na movimentação, para o histórico
+    continuar contando de onde veio cada valor.
+    """
+    contrato = get_object_or_404(Contrato, pk=pk)
+    destino = redirect("contrato_detalhe", pk=contrato.pk)
+    if request.method != "POST":
+        return destino
+
+    form = ValorEmLoteForm(request.POST)
+    locacoes = list(
+        contrato.locacoes
+        .filter(pk__in=request.POST.getlist("locacoes"), ativa=True)
+        .select_related("equipamento")
+    )
+
+    if not locacoes:
+        messages.error(
+            request,
+            "Marque ao menos uma máquina ativa para aplicar o valor.",
+        )
+        return destino
+    if not form.is_valid():
+        messages.error(request, form.errors["valor"][0])
+        return destino
+
+    valor = form.cleaned_data["valor"]
+    alteradas = []
+    for locacao in locacoes:
+        if locacao.valor == valor:
+            continue
+        anterior = locacao.valor
+        locacao.valor = valor
+        locacao.save(update_fields=["valor"])
+        registrar_movimentacao(
+            locacao.equipamento,
+            Movimentacao.Tipo.LOCACAO,
+            f"Valor da locação: R$ {_reais(anterior)} → R$ {_reais(valor)} "
+            f"(alteração em lote, contrato Nº {contrato.numero}).",
+            request.user,
+        )
+        alteradas.append(locacao)
+
+    if alteradas:
+        messages.success(
+            request,
+            f"R$ {_reais(valor)} aplicado a {len(alteradas)} "
+            f"máquina{'s' if len(alteradas) > 1 else ''} "
+            f"do contrato Nº {contrato.numero}."
+            + (f" As outras {len(locacoes) - len(alteradas)} já estavam "
+               f"com esse valor." if len(locacoes) > len(alteradas) else "")
+        )
+    else:
+        messages.info(
+            request,
+            f"Nada a mudar: as {len(locacoes)} máquinas marcadas já estavam "
+            f"com R$ {_reais(valor)}.",
+        )
+    return destino
 
 
 @login_required
@@ -613,7 +702,11 @@ def contrato_detalhe(request, pk):
         "aditivos": aditivos,
         "ultimo_aditivo_id": ultimo_id,
         "locacoes": locacoes,
-        "qtd_maquinas": locacoes.count(),
+        # O contador mostra só o que está ativo hoje; a tabela abaixo continua
+        # listando também as locações encerradas, como histórico do contrato.
+        "qtd_maquinas": locacoes.filter(ativa=True).count(),
+        "qtd_encerradas": locacoes.filter(ativa=False).count(),
+        "valor_lote_form": ValorEmLoteForm(),
     }
     return render(request, "inventario/contrato_detalhe.html", contexto)
 
@@ -782,6 +875,7 @@ def _chamados_filtrados(request):
     """
     status = request.GET.get("status", "").strip()
     tecnico_id = request.GET.get("tecnico", "").strip()
+    cliente_id = request.GET.get("cliente", "").strip()
     de = request.GET.get("de", "").strip()
     ate = request.GET.get("ate", "").strip()
 
@@ -793,6 +887,8 @@ def _chamados_filtrados(request):
         chamados = chamados.filter(status=status)
     if tecnico_id:
         chamados = chamados.filter(tecnico_id=tecnico_id)
+    if cliente_id:
+        chamados = chamados.filter(cliente_id=cliente_id)
     if de:
         chamados = chamados.filter(aberto_em__date__gte=de)
     if ate:
@@ -801,12 +897,18 @@ def _chamados_filtrados(request):
     filtros = {
         "status": status,
         "tecnico": tecnico_id,
+        "cliente": cliente_id,
         "de": de,
         "ate": ate,
         "status_choices": Chamado.Status.choices,
         "tecnicos": get_user_model().objects
             .filter(chamados_designados__isnull=False)
             .distinct().order_by("username"),
+        # Só os clientes que já tiveram atendimento — um cliente sem chamado
+        # na lista só levaria a um resultado vazio.
+        "clientes": Cliente.objects
+            .filter(chamados__isnull=False)
+            .distinct().order_by("nome"),
     }
     return chamados, filtros
 
@@ -840,7 +942,9 @@ def chamado_novo(request):
             chamado.save()
             messages.success(
                 request,
-                f"Chamado aberto — Ordem de Serviço {chamado.numero_os}.",
+                f"Chamado aberto — Ordem de Serviço {chamado.numero_os}. "
+                f"Imprima a OS física (o botão está aí em cima) e entregue "
+                f"ao técnico.",
             )
             return redirect("chamado_detalhe", pk=chamado.pk)
     else:
@@ -867,10 +971,34 @@ def chamado_detalhe(request, pk):
     if request.method == "POST":
         if not pode_encerrar:
             raise PermissionDenied
+        # Anexo avulso: a folha assinada chegou depois, com a OS já encerrada.
+        if "anexar" in request.POST:
+            anexo = ChamadoAnexoForm(
+                request.POST, request.FILES, instance=chamado
+            )
+            if anexo.is_valid():
+                anexo.save()
+                messages.success(
+                    request,
+                    f"OS digitalizada anexada à Ordem de Serviço "
+                    f"{chamado.numero_os}.",
+                )
+                return redirect("chamado_detalhe", pk=chamado.pk)
+            return render(
+                request, "inventario/chamado_detalhe.html",
+                {
+                    "chamado": chamado,
+                    "form": ChamadoEncerramentoForm(instance=chamado),
+                    "anexo_form": anexo,
+                    "pode_encerrar": pode_encerrar,
+                },
+            )
         if chamado.encerrado:
             messages.info(request, "Este chamado já está encerrado.")
             return redirect("chamado_detalhe", pk=chamado.pk)
-        form = ChamadoEncerramentoForm(request.POST, instance=chamado)
+        form = ChamadoEncerramentoForm(
+            request.POST, request.FILES, instance=chamado
+        )
         if form.is_valid():
             chamado = form.save(commit=False)
             chamado.status = Chamado.Status.ENCERRADO
@@ -888,42 +1016,153 @@ def chamado_detalhe(request, pk):
 
     return render(
         request, "inventario/chamado_detalhe.html",
-        {"chamado": chamado, "form": form, "pode_encerrar": pode_encerrar},
+        {
+            "chamado": chamado,
+            "form": form,
+            "anexo_form": ChamadoAnexoForm(),
+            "pode_encerrar": pode_encerrar,
+        },
     )
+
+
+def _painel_dados():
+    """O que o painel da área técnica mostra.
+
+    Em cima os chamados em aberto (urgente na frente); embaixo os que foram
+    encerrados hoje, para a equipe ver o que já saiu sem precisar abrir outra
+    tela. `ultimo_id` é o maior número de OS já gravado — é ele que o painel
+    compara a cada atualização para saber que entrou chamado novo e apitar.
+    """
+    base = Chamado.objects.select_related(
+        "equipamento", "equipamento__produto", "tecnico", "cliente",
+        "aberto_por", "encerrado_por",
+    )
+    limite_atraso = timezone.now() - timedelta(hours=Chamado.HORAS_ATE_ATRASO)
+    abertos = (
+        base.filter(status=Chamado.Status.ABERTO)
+        .annotate(
+            # Quem passou das 24h vai para o topo, seja qual for a urgência:
+            # esperar um dia inteiro é o problema mais grave do painel.
+            atraso=Case(
+                When(aberto_em__lte=limite_atraso, then=Value(0)),
+                default=Value(1),
+                output_field=IntegerField(),
+            ),
+            # Depois: urgente na frente, normal, leve — e dentro de cada grupo
+            # o mais antigo primeiro, que é quem está esperando há mais tempo.
+            peso=Case(
+                When(prioridade=Chamado.Prioridade.URGENTE, then=Value(1)),
+                When(prioridade=Chamado.Prioridade.NORMAL, then=Value(2)),
+                default=Value(3),
+                output_field=IntegerField(),
+            ),
+        )
+        .order_by("atraso", "peso", "aberto_em")
+    )
+    encerrados = (
+        base.filter(
+            status=Chamado.Status.ENCERRADO,
+            encerrado_em__date=timezone.localdate(),
+        )
+        .order_by("-encerrado_em")
+    )
+    ultimo = Chamado.objects.order_by("-id").first()
+    return {
+        "chamados": abertos,
+        "encerrados": encerrados,
+        "total": abertos.count(),
+        "urgentes": abertos.filter(
+            prioridade=Chamado.Prioridade.URGENTE
+        ).count(),
+        "qtd_encerrados": encerrados.count(),
+        "atrasados": abertos.filter(aberto_em__lte=limite_atraso).count(),
+        "horas_ate_atraso": Chamado.HORAS_ATE_ATRASO,
+        "ultimo_id": ultimo.pk if ultimo else 0,
+        "ultimo_urgente": bool(ultimo and ultimo.urgente),
+        "agora": timezone.now(),
+        "segundos_atualizacao": 15,
+    }
+
+
+@login_required
+def chamado_imprimir(request, pk):
+    """A Ordem de Serviço em papel, do jeito que vai para a impressora.
+
+    Sai com o **mesmo número** da OS do sistema — é por ele que a folha
+    preenchida e assinada volta a ser ligada a esta ordem na hora de anexar
+    a digitalização.
+    """
+    chamado = get_object_or_404(
+        Chamado.objects.select_related(
+            "equipamento", "equipamento__produto", "tecnico", "cliente",
+            "aberto_por",
+        ),
+        pk=pk,
+    )
+    return render(
+        request, "inventario/chamado_imprimir.html", {"chamado": chamado}
+    )
+
+
+@login_required
+def chamado_arquivo(request, pk):
+    """Abre a OS digitalizada anexada ao chamado.
+
+    Passa pelo Django (e não por uma URL pública em media/) para que só quem
+    está logado consiga abrir o comprovante assinado.
+    """
+    chamado = get_object_or_404(Chamado, pk=pk)
+    arquivo = chamado.arquivo_os
+    if not arquivo:
+        raise Http404("Nenhuma OS digitalizada anexada a este chamado.")
+    nome = os.path.basename(arquivo.name)
+    tipos = {
+        ".pdf": "application/pdf", ".png": "image/png",
+        ".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+    }
+    tipo = tipos.get(os.path.splitext(nome)[1].lower(), "application/octet-stream")
+    try:
+        return FileResponse(arquivo.open("rb"), content_type=tipo, filename=nome)
+    except FileNotFoundError:
+        raise Http404("O arquivo não está mais na pasta media.")
 
 
 @login_required
 def chamado_painel(request):
     """Painel da área técnica — a tela que fica no monitor transmitindo.
 
-    Mostra só os chamados em aberto, em letra grande, e se atualiza sozinha.
+    Letra grande, fundo escuro e atualização sozinha. A primeira carga vem
+    montada daqui; da segunda em diante quem atualiza é o JavaScript, por
+    `chamado_painel_dados`.
     """
-    chamados = (
-        Chamado.objects
-        .filter(status=Chamado.Status.ABERTO)
-        .select_related("equipamento", "equipamento__produto", "tecnico", "cliente")
-        # Urgente na frente, depois normal, depois leve — e dentro de cada
-        # grupo o mais antigo primeiro, que é quem está esperando há mais tempo.
-        .annotate(
-            peso=Case(
-                When(prioridade=Chamado.Prioridade.URGENTE, then=Value(1)),
-                When(prioridade=Chamado.Prioridade.NORMAL, then=Value(2)),
-                default=Value(3),
-                output_field=IntegerField(),
-            )
-        )
-        .order_by("peso", "aberto_em")
-    )
-    return render(
-        request, "inventario/chamado_painel.html",
-        {
-            "chamados": chamados,
-            "total": chamados.count(),
-            "urgentes": chamados.filter(prioridade=Chamado.Prioridade.URGENTE).count(),
-            "agora": timezone.now(),
-            "segundos_atualizacao": 60,
-        },
-    )
+    return render(request, "inventario/chamado_painel.html", _painel_dados())
+
+
+@login_required
+def chamado_painel_dados(request):
+    """Os cartões do painel em JSON, para a tela se atualizar sem recarregar.
+
+    Recarregar a página inteira (o velho `<meta refresh>`) **matava o alerta
+    sonoro**: o navegador só deixa tocar som depois de um clique do usuário, e
+    a cada reload essa liberação era perdida. Trocando o reload por esta busca
+    em segundo plano, o clique em "Ativar som" vale para o dia inteiro.
+
+    O HTML sai do mesmo `_painel_cards.html` que a primeira carga usa — assim
+    o cartão é escrito num lugar só.
+    """
+    dados = _painel_dados()
+    return JsonResponse({
+        "html": render_to_string(
+            "inventario/_painel_cards.html", dados, request=request
+        ),
+        "total": dados["total"],
+        "urgentes": dados["urgentes"],
+        "qtd_encerrados": dados["qtd_encerrados"],
+        "atrasados": dados["atrasados"],
+        "ultimo_id": dados["ultimo_id"],
+        "ultimo_urgente": dados["ultimo_urgente"],
+        "agora": timezone.localtime(dados["agora"]).strftime("%d/%m/%Y %H:%M"),
+    })
 
 
 @login_required

@@ -7,15 +7,19 @@
     <a href="{% url 'chamado_lista' %}" class="text-decoration-none small">← Painel de chamados</a>
     <h4 class="mb-0 mt-1">Ordem de Serviço {{ chamado.numero_os }}</h4>
   </div>
-  <div class="d-flex gap-2">
-    <span class="badge fs-6"
+  <div class="d-flex gap-2 align-items-start">
+    <a href="{% url 'chamado_imprimir' chamado.pk %}" target="_blank"
+       class="btn text-white" style="background:#162D63;">
+      🖨️ Imprimir OS
+    </a>
+    <span class="badge fs-6 align-self-center"
           style="background:{{ chamado.alerta.cor }};color:{{ chamado.alerta.texto }};">
       {{ chamado.alerta.icone }} {{ chamado.alerta.rotulo }}
     </span>
     {% if chamado.encerrado %}
-      <span class="badge fs-6" style="background:#16A34A;">Encerrado</span>
+      <span class="badge fs-6 align-self-center" style="background:#16A34A;">Encerrado</span>
     {% else %}
-      <span class="badge fs-6" style="background:#DC2626;">Aberto</span>
+      <span class="badge fs-6 align-self-center" style="background:#DC2626;">Aberto</span>
     {% endif %}
   </div>
 </div>
@@ -75,7 +79,13 @@
 
         <hr>
         <strong>O que deve ser feito</strong>
-        <p class="mb-0 mt-1" style="white-space:pre-wrap;">{{ chamado.descricao }}</p>
+        <p class="mb-3 mt-1" style="white-space:pre-wrap;">{{ chamado.descricao }}</p>
+
+        <div class="alert alert-light border mb-0 small">
+          📄 A <strong>OS física</strong> sai com este mesmo número
+          (<strong>{{ chamado.numero_os }}</strong>). Imprima, entregue ao técnico e,
+          depois de assinada, digitalize e anexe aqui.
+        </div>
       </div>
     </div>
   </div>
@@ -102,7 +112,22 @@
 
           <hr>
           <strong>O que foi realizado</strong>
-          <p class="mb-0 mt-1" style="white-space:pre-wrap;">{{ chamado.realizado }}</p>
+          <p class="mb-3 mt-1" style="white-space:pre-wrap;">{{ chamado.realizado }}</p>
+
+          <strong>Troca de peça</strong>
+          <p class="mb-3 mt-1">
+            {% if chamado.houve_troca_peca %}
+              <span class="badge" style="background:#F97316;">Sim</span>
+              {{ chamado.peca_substituida|default:"peça não especificada" }}
+            {% else %}
+              <span class="badge bg-light text-dark border">Não houve troca de peça</span>
+            {% endif %}
+          </p>
+
+          {% if chamado.observacoes %}
+            <strong>Observações</strong>
+            <p class="mb-3 mt-1" style="white-space:pre-wrap;">{{ chamado.observacoes }}</p>
+          {% endif %}
 
         {% else %}
           <p class="text-muted">
@@ -111,8 +136,9 @@
           </p>
 
           {% if pode_encerrar %}
-            <form method="post" novalidate>
+            <form method="post" enctype="multipart/form-data" novalidate>
               {% csrf_token %}
+
               <div class="mb-3">
                 <label class="form-label" for="{{ form.realizado.id_for_label }}">
                   {{ form.realizado.label }}
@@ -122,6 +148,45 @@
                   <div class="text-danger small">{{ erro }}</div>
                 {% endfor %}
               </div>
+
+              <div class="form-check mb-2">
+                {{ form.houve_troca_peca }}
+                <label class="form-check-label" for="{{ form.houve_troca_peca.id_for_label }}">
+                  {{ form.houve_troca_peca.label }}
+                </label>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="{{ form.peca_substituida.id_for_label }}">
+                  {{ form.peca_substituida.label }}
+                </label>
+                {{ form.peca_substituida }}
+                {% for erro in form.peca_substituida.errors %}
+                  <div class="text-danger small">{{ erro }}</div>
+                {% endfor %}
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="{{ form.observacoes.id_for_label }}">
+                  {{ form.observacoes.label }}
+                </label>
+                {{ form.observacoes }}
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label" for="{{ form.arquivo_os.id_for_label }}">
+                  {{ form.arquivo_os.label }}
+                </label>
+                {{ form.arquivo_os }}
+                <div class="form-text">
+                  A folha assinada, em PDF, JPG ou PNG. Se o scanner não estiver
+                  à mão agora, pode encerrar sem ela e anexar depois.
+                </div>
+                {% for erro in form.arquivo_os.errors %}
+                  <div class="text-danger small">{{ erro }}</div>
+                {% endfor %}
+              </div>
+
               <button type="submit" class="btn text-white w-100" style="background:#16A34A;">
                 Encerrar chamado
               </button>
@@ -136,6 +201,71 @@
     </div>
   </div>
 
+</div>
+
+{# ---------- A OS física digitalizada ---------- #}
+<div class="card shadow-sm mt-3">
+  <div class="card-body">
+    <h6 class="text-uppercase text-muted mb-2">OS digitalizada</h6>
+
+    {% if chamado.arquivo_os %}
+      <p class="mb-2">
+        <a href="{% url 'chamado_arquivo' chamado.pk %}" target="_blank"
+           class="btn btn-outline-primary">
+          📎 Abrir {{ chamado.nome_arquivo_os }}
+        </a>
+      </p>
+      <p class="text-muted small mb-0">
+        Comprovante do atendimento da OS {{ chamado.numero_os }}, com as assinaturas.
+        Fica guardado aqui para consulta.
+      </p>
+      {% if pode_encerrar %}
+        <hr>
+        <form method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+          {% csrf_token %}
+          <div class="col-md-8">
+            <label class="form-label small text-muted mb-1">Substituir por outro arquivo</label>
+            {{ anexo_form.arquivo_os }}
+            {% for erro in anexo_form.arquivo_os.errors %}
+              <div class="text-danger small">{{ erro }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-md-4">
+            <button name="anexar" value="1" class="btn btn-outline-secondary w-100">
+              Substituir
+            </button>
+          </div>
+        </form>
+      {% endif %}
+
+    {% else %}
+      <p class="text-muted mb-2">
+        Nenhuma folha digitalizada anexada ainda.
+        {% if chamado.encerrado %}
+          Esta OS foi encerrada sem o comprovante — anexe assim que digitalizar.
+        {% endif %}
+      </p>
+      {% if pode_encerrar %}
+        <form method="post" enctype="multipart/form-data" class="row g-2 align-items-end">
+          {% csrf_token %}
+          <div class="col-md-8">
+            <label class="form-label small text-muted mb-1">
+              Anexar a OS {{ chamado.numero_os }} digitalizada (PDF, JPG ou PNG)
+            </label>
+            {{ anexo_form.arquivo_os }}
+            {% for erro in anexo_form.arquivo_os.errors %}
+              <div class="text-danger small">{{ erro }}</div>
+            {% endfor %}
+          </div>
+          <div class="col-md-4">
+            <button name="anexar" value="1" class="btn text-white w-100" style="background:#162D63;">
+              📎 Anexar
+            </button>
+          </div>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
 </div>
 
 {% endblock %}

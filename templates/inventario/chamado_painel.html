@@ -1,13 +1,23 @@
 {% comment %}
-Painel para ficar aberto num monitor da área técnica. Não estende o base.html
-de propósito: sem menu, letra grande e fundo escuro, para ser lido de longe.
-Se atualiza sozinho pelo <meta refresh> abaixo.
+Painel para ficar aberto num monitor (ou numa TV) da área técnica. Não estende
+o base.html de propósito: sem menu, letra grande e fundo escuro, para ser lido
+de longe.
+
+Dois avisos sonoros, ambos automáticos — a tela fica transmitindo o dia todo e
+ninguém vai estar ali para apertar nada:
+
+* chamado NOVO  → apito forte, na hora que ele entra;
+* chamado que passou de 24h em aberto → sirene, repetida de 5 em 5 minutos
+  até alguém encerrar.
+
+Não usa <meta refresh>: a tela se atualiza buscando `chamado_painel_dados` em
+segundo plano. Recarregar a página derrubava a liberação de áudio a cada
+minuto e o som nunca tocava.
 {% endcomment %}<!doctype html>
 <html lang="pt-br">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta http-equiv="refresh" content="{{ segundos_atualizacao }}">
   <title>Ordens de Serviço — área técnica</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <style>
@@ -15,19 +25,49 @@ Se atualiza sozinho pelo <meta refresh> abaixo.
     .os-card { background:#1E293B; border:1px solid #334155; border-radius:.75rem;
               border-left-width:10px; border-left-style:solid; }
     .os-urgente { border-color:#DC2626; box-shadow:0 0 0 2px rgba(220,38,38,.35); }
+    .os-card-fechado { border-left-color:#16A34A; opacity:.72; }
     .os-alerta { font-size:1rem; font-weight:700; padding:.2rem .6rem;
-                 border-radius:.4rem; }
+                 border-radius:.4rem; display:inline-block; }
+    .os-status-aberto { background:#0EA5E9; color:#03212F; }
+    .os-status-encerrado { background:#16A34A; color:#FFFFFF; }
     .os-cliente { font-size:1.15rem; font-weight:600; color:#93C5FD; }
+    .os-cliente-pequeno { font-size:1rem; font-weight:600; color:#93C5FD; }
     .os-numero { color:#38BDF8; font-weight:700; letter-spacing:1px; }
     .os-hora { font-size:2rem; font-weight:700; line-height:1; }
     .os-maquina { font-size:1.35rem; font-weight:600; }
     .os-descricao { font-size:1.15rem; }
+    .os-rodape { font-size:.95rem; }
     .os-tecnico { font-size:1.1rem; color:#FACC15; font-weight:600; }
     .os-espera { font-size:1.05rem; color:#FCA5A5; }
+    .os-secao { border-top:2px solid #334155; padding-top:1.25rem; }
     .cabecalho { border-bottom:2px solid #334155; }
+
+    /* --- Passou de 24h: tem que saltar aos olhos do outro lado da sala --- */
+    .os-atrasado { border-color:#F43F5E;
+                   box-shadow:0 0 0 3px rgba(244,63,94,.45); }
+    .os-status-atrasado { background:#F43F5E; color:#FFFFFF;
+                          animation:pulsaAtraso 1.4s ease-in-out infinite; }
+    .os-espera-grave { color:#FDA4AF; font-weight:700; font-size:1.15rem; }
+    @keyframes pulsaAtraso { 50% { opacity:.35; } }
+
+    /* Piscadas que acompanham os avisos sonoros */
+    @keyframes piscaNovo    { 50% { background:#1E3A5F; } }
+    @keyframes piscaAtraso  { 50% { background:#4C0519; } }
+    body.aviso-novo   { animation:piscaNovo .6s ease-in-out 3; }
+    body.aviso-atraso { animation:piscaAtraso .8s ease-in-out 4; }
+
+    /* Só aparece se o navegador tiver bloqueado o som */
+    #trava-som { display:none; position:fixed; inset:0; z-index:9999;
+                 background:rgba(15,23,42,.93); cursor:pointer;
+                 align-items:center; justify-content:center; text-align:center; }
+    #trava-som.aparece { display:flex; }
+    #trava-som div { max-width:44rem; padding:2rem; }
   </style>
 </head>
-<body>
+<body data-ultimo-id="{{ ultimo_id }}"
+      data-atrasados="{{ atrasados }}"
+      data-intervalo="{{ segundos_atualizacao }}"
+      data-url="{% url 'chamado_painel_dados' %}">
 
 <div class="container-fluid py-3">
 
@@ -35,73 +75,215 @@ Se atualiza sozinho pelo <meta refresh> abaixo.
     <h1 class="mb-0">🔧 Ordens de Serviço — área técnica</h1>
     <div class="text-end">
       <div class="fs-3 fw-bold">
-        {{ total }} chamado{{ total|pluralize }} em aberto
-        {% if urgentes %}
-          <span class="badge align-middle" style="background:#DC2626;">
-            🔴 {{ urgentes }} urgente{{ urgentes|pluralize }}
-          </span>
-        {% endif %}
+        <span id="painel-total">{{ total }}</span>
+        chamado<span id="painel-total-s">{{ total|pluralize }}</span> em aberto
+        <span id="painel-urgentes" class="badge align-middle"
+              style="background:#DC2626;{% if not urgentes %}display:none;{% endif %}">
+          🔴 {{ urgentes }} urgente{{ urgentes|pluralize }}
+        </span>
+        <span id="painel-atrasados" class="badge align-middle"
+              style="background:#F43F5E;{% if not atrasados %}display:none;{% endif %}">
+          ⏰ {{ atrasados }} há mais de {{ horas_ate_atraso }}h
+        </span>
       </div>
       <div class="text-secondary">
-        atualizado {{ agora|date:"d/m/Y H:i" }} · a tela se atualiza sozinha
+        atualizado <span id="painel-agora">{{ agora|date:"d/m/Y H:i" }}</span>
+        · a tela se atualiza sozinha
       </div>
     </div>
   </div>
 
-  {% if chamados %}
-    <div class="row g-3">
-      {% for c in chamados %}
-      <div class="col-xl-4 col-lg-6">
-        <div class="os-card h-100 p-3 {% if c.urgente %}os-urgente{% endif %}"
-             style="border-left-color:{{ c.alerta.cor }};">
-          <div class="d-flex justify-content-between align-items-start mb-2">
-            <div>
-              <span class="os-numero fs-4">OS {{ c.numero_os }}</span>
-              <div class="mt-1">
-                <span class="os-alerta"
-                      style="background:{{ c.alerta.cor }};color:{{ c.alerta.texto }};">
-                  {{ c.alerta.rotulo }}
-                </span>
-              </div>
-            </div>
-            <div class="text-end">
-              <div class="os-hora">{{ c.aberto_em|date:"H:i" }}</div>
-              <div class="text-secondary small">{{ c.aberto_em|date:"d/m/Y" }}</div>
-            </div>
-          </div>
-
-          {% if c.cliente %}
-            <div class="os-cliente mb-1">🏢 {{ c.cliente }}</div>
-          {% endif %}
-          <div class="os-maquina mb-1">
-            Pat. {{ c.equipamento.numero_patrimonio }}
-          </div>
-          <div class="text-secondary mb-2">
-            {% if c.equipamento.produto %}{{ c.equipamento.produto }} · {% endif %}
-            {{ c.equipamento.marca }} {{ c.equipamento.modelo }}
-            {% if c.equipamento.local %}<br>📍 {{ c.equipamento.local }}{% endif %}
-          </div>
-
-          <div class="os-descricao mb-3">{{ c.descricao|truncatechars:160 }}</div>
-
-          <div class="d-flex justify-content-between align-items-end mt-auto">
-            <span class="os-tecnico">
-              👤 {% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}sem técnico{% endif %}
-            </span>
-            <span class="os-espera">aberto há {{ c.tempo_aberto_texto }}</span>
-          </div>
-        </div>
-      </div>
-      {% endfor %}
-    </div>
-  {% else %}
-    <div class="text-center py-5">
-      <div style="font-size:4rem;">✅</div>
-      <h2 class="text-secondary">Nenhum chamado em aberto</h2>
-    </div>
-  {% endif %}
+  <div id="painel-cards">
+    {% include "inventario/_painel_cards.html" %}
+  </div>
 
 </div>
+
+{# Só aparece quando o navegador barra o áudio. Um clique em qualquer lugar resolve. #}
+<div id="trava-som">
+  <div>
+    <div style="font-size:5rem;line-height:1;">🔇</div>
+    <h2 class="mt-3">Clique em qualquer lugar para ligar o som</h2>
+    <p class="fs-5 text-secondary mb-0">
+      O navegador bloqueia som antes do primeiro clique na página.
+      Um clique agora vale enquanto esta tela ficar aberta.
+    </p>
+  </div>
+</div>
+
+<script>
+(function () {
+  const corpo     = document.body;
+  const urlDados  = corpo.dataset.url;
+  const intervalo = (parseInt(corpo.dataset.intervalo, 10) || 15) * 1000;
+  const MINUTOS_ENTRE_SIRENES = 5;
+
+  let ultimoId     = parseInt(corpo.dataset.ultimoId, 10) || 0;
+  let ultimaSirene = 0;   // 0 = nunca tocou; um atraso novo apita na hora
+
+  // ---------------------------------------------------------------
+  // Áudio
+  // ---------------------------------------------------------------
+  // Os dois avisos são gerados na hora pelo próprio navegador (Web Audio),
+  // sem arquivo de som para baixar nem depender de rede.
+  //
+  // A liberação é tentada sozinha no carregamento. Navegador nenhum deixa
+  // uma página tocar som antes de o usuário interagir com ela, então, se o
+  // Chrome barrar, cai no aviso de tela cheia — e aí QUALQUER clique libera.
+  let audio = null, mestre = null;
+
+  function saida() {
+    if (!mestre) {
+      mestre = audio.createGain();
+      mestre.gain.value = 1;
+      // O compressor deixa levantar o volume sem estourar o alto-falante
+      // da TV quando as duas ondas somam.
+      const comp = audio.createDynamicsCompressor();
+      mestre.connect(comp);
+      comp.connect(audio.destination);
+    }
+    return mestre;
+  }
+
+  function tentaLiberar() {
+    if (!audio) {
+      const Ctx = window.AudioContext || window.webkitAudioContext;
+      if (!Ctx) return Promise.resolve(false);
+      audio = new Ctx();
+    }
+    return audio.resume()
+      .then(function () { return audio.state === 'running'; })
+      .catch(function () { return false; });
+  }
+
+  const trava = document.getElementById('trava-som');
+
+  function mostraTrava(precisa) {
+    trava.classList.toggle('aparece', precisa);
+  }
+
+  function liberado() {
+    return audio && audio.state === 'running';
+  }
+
+  // Tenta sozinho; se não der, o aviso aparece e o primeiro clique resolve.
+  tentaLiberar().then(function (ok) { mostraTrava(!ok); });
+
+  ['click', 'keydown', 'touchstart'].forEach(function (evento) {
+    document.addEventListener(evento, function () {
+      if (liberado()) return;
+      tentaLiberar().then(function (ok) { mostraTrava(!ok); });
+    });
+  });
+
+  /** Apito de chamado novo: forte, curto e repetido. */
+  function apito() {
+    if (!liberado()) return;
+    const vezes = 3, dur = 0.26, intervaloBip = 0.34;
+    for (let i = 0; i < vezes; i++) {
+      const t = audio.currentTime + i * intervaloBip;
+      // Duas ondas somadas: a quadrada corta o barulho da sala, a senoide
+      // uma oitava acima dá o brilho que faz a pessoa virar a cabeça.
+      [['square', 880, 0.85], ['sine', 1760, 0.45]].forEach(function (voz) {
+        const osc   = audio.createOscillator();
+        const ganho = audio.createGain();
+        osc.type = voz[0];
+        osc.frequency.value = voz[1];
+        ganho.gain.setValueAtTime(0.0001, t);
+        ganho.gain.exponentialRampToValueAtTime(voz[2], t + 0.012);
+        ganho.gain.setValueAtTime(voz[2], t + dur - 0.06);
+        ganho.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        osc.connect(ganho); ganho.connect(saida());
+        osc.start(t); osc.stop(t + dur + 0.02);
+      });
+    }
+  }
+
+  /** Sirene de chamado parado há mais de 24h: sobe e desce, bem diferente do apito. */
+  function sirene(segundos) {
+    if (!liberado()) return;
+    const t0 = audio.currentTime;
+    const osc   = audio.createOscillator();
+    const ganho = audio.createGain();
+    osc.type = 'sawtooth';
+    // Varre 480 Hz ↔ 1150 Hz em ciclos de 1,2s — o desenho de sirene.
+    const meio = 0.6;
+    for (let t = 0; t < segundos; t += meio * 2) {
+      osc.frequency.setValueAtTime(480, t0 + t);
+      osc.frequency.linearRampToValueAtTime(1150, t0 + t + meio);
+      osc.frequency.linearRampToValueAtTime(480, t0 + t + meio * 2);
+    }
+    ganho.gain.setValueAtTime(0.0001, t0);
+    ganho.gain.exponentialRampToValueAtTime(0.7, t0 + 0.06);
+    ganho.gain.setValueAtTime(0.7, t0 + segundos - 0.25);
+    ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + segundos);
+    osc.connect(ganho); ganho.connect(saida());
+    osc.start(t0); osc.stop(t0 + segundos + 0.05);
+  }
+
+  function piscar(classe) {
+    corpo.classList.remove('aviso-novo', 'aviso-atraso');
+    void corpo.offsetWidth;                 // reinicia a animação
+    corpo.classList.add(classe);
+  }
+
+  /** Sirene a cada 5 min enquanto existir chamado passado das 24h. */
+  function cuidaDoAtraso(quantos) {
+    if (!quantos) {
+      ultimaSirene = 0;     // limpou: se voltar a atrasar, apita na hora
+      return;
+    }
+    const agora = Date.now();
+    if (agora - ultimaSirene < MINUTOS_ENTRE_SIRENES * 60 * 1000) return;
+    ultimaSirene = agora;
+    sirene(3);
+    piscar('aviso-atraso');
+  }
+
+  // ---------------------------------------------------------------
+  // Atualização
+  // ---------------------------------------------------------------
+  function atualizar() {
+    fetch(urlDados, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        document.getElementById('painel-cards').innerHTML = d.html;
+        document.getElementById('painel-total').textContent   = d.total;
+        document.getElementById('painel-total-s').textContent = d.total === 1 ? '' : 's';
+        document.getElementById('painel-agora').textContent   = d.agora;
+
+        const urgentes = document.getElementById('painel-urgentes');
+        urgentes.textContent = '🔴 ' + d.urgentes + ' urgente' + (d.urgentes === 1 ? '' : 's');
+        urgentes.style.display = d.urgentes ? '' : 'none';
+
+        const atrasados = document.getElementById('painel-atrasados');
+        atrasados.textContent = '⏰ ' + d.atrasados + ' há mais de {{ horas_ate_atraso }}h';
+        atrasados.style.display = d.atrasados ? '' : 'none';
+
+        if (d.ultimo_id > ultimoId) {       // entrou OS nova desde a última olhada
+          ultimoId = d.ultimo_id;
+          apito();
+          piscar('aviso-novo');
+        }
+        cuidaDoAtraso(d.atrasados);
+      })
+      .catch(function () { /* rede caiu: tenta de novo no próximo ciclo */ });
+  }
+
+  // Se já abriu a tela com chamado atrasado, a sirene não espera o primeiro
+  // ciclo de atualização — toca assim que o som estiver liberado.
+  const atrasoInicial = parseInt(corpo.dataset.atrasados, 10) || 0;
+  if (atrasoInicial) {
+    const tentaAgora = setInterval(function () {
+      if (!liberado()) return;
+      clearInterval(tentaAgora);
+      cuidaDoAtraso(atrasoInicial);
+    }, 1000);
+  }
+
+  setInterval(atualizar, intervalo);
+})();
+</script>
 
 </body>
 </html>

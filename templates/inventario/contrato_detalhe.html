@@ -41,44 +41,98 @@
   <div class="card-body">
     <h6 class="text-uppercase text-muted mb-1">
       Máquinas neste contrato <span class="text-muted">({{ qtd_maquinas }})</span>
+      {% if qtd_encerradas %}
+        <span class="badge bg-light text-dark border fw-normal text-lowercase">
+          + {{ qtd_encerradas }} encerrada{{ qtd_encerradas|pluralize }}, fora da conta
+        </span>
+      {% endif %}
     </h6>
     <p class="text-muted small mb-2">
-      Todas as locações vinculadas a este contrato. Para incluir outra máquina,
-      abra a ficha do equipamento, registre a locação e escolha este contrato.
+      O total conta só as máquinas <strong>ativas</strong> hoje — as locações
+      encerradas continuam listadas abaixo como histórico, mas não entram na
+      quantidade. Para incluir outra máquina, abra a ficha do equipamento,
+      registre a locação e escolha este contrato.
     </p>
     {% if locacoes %}
-      <div class="table-responsive">
-        <table class="table table-sm table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th>Patrimônio</th><th>Produto</th><th>Equipamento</th>
-              <th class="text-end">Valor</th><th>Início</th><th>Situação</th><th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {% for l in locacoes %}
-            <tr>
-              <td><strong>{{ l.equipamento.numero_patrimonio }}</strong></td>
-              <td>{{ l.equipamento.produto|default:"—" }}</td>
-              <td>{{ l.equipamento.marca }} {{ l.equipamento.modelo }}</td>
-              <td class="text-end">R$ {{ l.valor|floatformat:2 }}</td>
-              <td>{{ l.data_inicio|date:"d/m/Y" }}</td>
-              <td>
-                {% if l.ativa %}
-                  <span class="badge bg-success">Ativa</span>
-                {% else %}
-                  <span class="badge bg-secondary">Encerrada {{ l.data_fim|date:"d/m/Y" }}</span>
+      {% comment %}
+      Marcar várias e aplicar um valor só: num contrato é comum a frota
+      inteira sair pelo mesmo preço. A coluna de marcar só aparece para
+      quem pode alterar locação, e só nas linhas ativas.
+      {% endcomment %}
+      <form method="post" action="{% url 'locacao_valor_em_lote' contrato.pk %}"
+            id="form-valor-lote">
+        {% csrf_token %}
+        <div class="table-responsive">
+          <table class="table table-sm table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                {% if perms.inventario.change_locacao %}
+                  <th style="width:2.5rem;">
+                    <input type="checkbox" class="form-check-input" id="marcar-todas"
+                           title="Marcar todas as ativas">
+                  </th>
                 {% endif %}
-              </td>
-              <td class="text-end">
-                <a href="{% url 'equipamento_detalhe' l.equipamento.pk %}"
-                   class="btn btn-sm btn-outline-secondary py-0">Ver</a>
-              </td>
-            </tr>
-            {% endfor %}
-          </tbody>
-        </table>
-      </div>
+                <th>Patrimônio</th><th>Produto</th><th>Equipamento</th>
+                <th class="text-end">Valor</th><th>Início</th><th>Situação</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for l in locacoes %}
+              <tr>
+                {% if perms.inventario.change_locacao %}
+                  <td>
+                    {% if l.ativa %}
+                      <input type="checkbox" class="form-check-input marca-locacao"
+                             name="locacoes" value="{{ l.pk }}">
+                    {% endif %}
+                  </td>
+                {% endif %}
+                <td><strong>{{ l.equipamento.numero_patrimonio }}</strong></td>
+                <td>{{ l.equipamento.produto|default:"—" }}</td>
+                <td>{{ l.equipamento.marca }} {{ l.equipamento.modelo }}</td>
+                <td class="text-end">R$ {{ l.valor|floatformat:2 }}</td>
+                <td>{{ l.data_inicio|date:"d/m/Y" }}</td>
+                <td>
+                  {% if l.ativa %}
+                    <span class="badge bg-success">Ativa</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Encerrada {{ l.data_fim|date:"d/m/Y" }}</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">
+                  <a href="{% url 'equipamento_detalhe' l.equipamento.pk %}"
+                     class="btn btn-sm btn-outline-secondary py-0">Ver</a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+
+        {% if perms.inventario.change_locacao and qtd_maquinas %}
+          <div class="border rounded-3 p-2 mt-3" style="background:#f8fafc;">
+            <div class="row g-2 align-items-end">
+              <div class="col-md-5">
+                <label class="form-label small text-muted mb-1"
+                       for="{{ valor_lote_form.valor.id_for_label }}">
+                  Valor da locação para as máquinas marcadas
+                </label>
+                {{ valor_lote_form.valor }}
+              </div>
+              <div class="col-md-4">
+                <button class="btn text-white w-100" style="background:#162D63;">
+                  Aplicar às <span id="conta-marcadas">0</span> marcadas
+                </button>
+              </div>
+              <div class="col-md-3">
+                <span class="small text-muted">
+                  Só as locações <strong>ativas</strong> podem ser alteradas.
+                </span>
+              </div>
+            </div>
+          </div>
+        {% endif %}
+      </form>
     {% else %}
       <p class="text-muted mb-0">Nenhuma máquina vinculada a este contrato ainda.</p>
     {% endif %}
@@ -136,4 +190,30 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const todas = document.getElementById('marcar-todas');
+  if (!todas) return;                       // usuário sem permissão de alterar
+  const marcas = document.querySelectorAll('.marca-locacao');
+  const conta  = document.getElementById('conta-marcadas');
+
+  function atualizaConta() {
+    const n = document.querySelectorAll('.marca-locacao:checked').length;
+    if (conta) conta.textContent = n;
+    // O "marcar todas" fica meio-marcado quando só parte está escolhida
+    todas.indeterminate = n > 0 && n < marcas.length;
+    todas.checked = n === marcas.length && n > 0;
+  }
+
+  todas.addEventListener('change', function () {
+    marcas.forEach(function (c) { c.checked = todas.checked; });
+    atualizaConta();
+  });
+  marcas.forEach(function (c) { c.addEventListener('change', atualizaConta); });
+  atualizaConta();
+})();
+</script>
 {% endblock %}
