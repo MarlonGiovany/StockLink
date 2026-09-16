@@ -5,6 +5,7 @@ __pycache__/
 
 # Banco de dados local e mídia (dados reais de produção — não versionar)
 db.sqlite3
+db.sqlite3.bak*
 media/
 
 # Arquivos estáticos coletados (gerados por collectstatic)

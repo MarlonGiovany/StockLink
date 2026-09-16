@@ -1,0 +1,105 @@
+{% comment %}
+Os cartões do painel da área técnica. Fica separado porque é usado duas vezes:
+na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
+`chamado_painel_dados` — o cartão é escrito num lugar só.
+{% endcomment %}
+
+{% if chamados %}
+  <div class="row g-3">
+    {% for c in chamados %}
+    <div class="col-xl-4 col-lg-6">
+      <div class="os-card h-100 p-3 {% if c.urgente %}os-urgente{% endif %} {% if c.atrasado %}os-atrasado{% endif %}"
+           style="border-left-color:{% if c.atrasado %}#F43F5E{% else %}{{ c.alerta.cor }}{% endif %};">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <span class="os-numero fs-4">OS {{ c.numero_os }}</span>
+            <div class="mt-1 d-flex flex-wrap gap-1">
+              {% if c.atrasado %}
+                <span class="os-alerta os-status-atrasado">
+                  ⏰ MAIS DE {{ horas_ate_atraso }}H EM ABERTO
+                </span>
+              {% endif %}
+              <span class="os-alerta"
+                    style="background:{{ c.alerta.cor }};color:{{ c.alerta.texto }};">
+                {{ c.alerta.rotulo }}
+              </span>
+              <span class="os-alerta os-status-aberto">● Aberto</span>
+            </div>
+          </div>
+          <div class="text-end">
+            <div class="os-hora">{{ c.aberto_em|date:"H:i" }}</div>
+            <div class="text-secondary small">{{ c.aberto_em|date:"d/m/Y" }}</div>
+          </div>
+        </div>
+
+        {% if c.cliente %}
+          <div class="os-cliente mb-1">🏢 {{ c.cliente }}</div>
+        {% endif %}
+        <div class="os-maquina mb-1">
+          Pat. {{ c.equipamento.numero_patrimonio }}
+        </div>
+        <div class="text-secondary mb-2">
+          {% if c.equipamento.produto %}{{ c.equipamento.produto }} · {% endif %}
+          {{ c.equipamento.marca }} {{ c.equipamento.modelo }}
+          {% if c.equipamento.local %}<br>📍 {{ c.equipamento.local }}{% endif %}
+        </div>
+
+        <div class="os-descricao mb-2">{{ c.descricao|truncatechars:160 }}</div>
+
+        <div class="os-rodape text-secondary mb-2">
+          {% if c.solicitante %}🙋 Pediu: {{ c.solicitante }}<br>{% endif %}
+          {% if c.aberto_por %}📝 Abriu: {{ c.aberto_por.get_username }}{% endif %}
+        </div>
+
+        <div class="d-flex justify-content-between align-items-end mt-auto">
+          <span class="os-tecnico">
+            👤 {% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}sem técnico{% endif %}
+          </span>
+          <span class="os-espera {% if c.atrasado %}os-espera-grave{% endif %}">
+            aberto há {{ c.tempo_aberto_texto }}
+          </span>
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% else %}
+  <div class="text-center py-5">
+    <div style="font-size:4rem;">✅</div>
+    <h2 class="text-secondary">Nenhum chamado em aberto</h2>
+  </div>
+{% endif %}
+
+{% if encerrados %}
+  <h2 class="os-secao mt-5 mb-3">
+    ✅ Encerrados hoje <span class="text-secondary fs-4">({{ qtd_encerrados }})</span>
+  </h2>
+  <div class="row g-3">
+    {% for c in encerrados %}
+    <div class="col-xl-4 col-lg-6">
+      <div class="os-card os-card-fechado h-100 p-3">
+        <div class="d-flex justify-content-between align-items-start mb-2">
+          <div>
+            <span class="os-numero fs-5">OS {{ c.numero_os }}</span>
+            <div class="mt-1">
+              <span class="os-alerta os-status-encerrado">✔ Encerrado</span>
+            </div>
+          </div>
+          <div class="text-end">
+            <div class="fs-5 fw-bold">{{ c.encerrado_em|date:"H:i" }}</div>
+            <div class="text-secondary small">levou {{ c.duracao_texto }}</div>
+          </div>
+        </div>
+        {% if c.cliente %}<div class="os-cliente-pequeno mb-1">🏢 {{ c.cliente }}</div>{% endif %}
+        <div class="mb-1">Pat. {{ c.equipamento.numero_patrimonio }}</div>
+        <div class="text-secondary small mb-2">
+          {{ c.equipamento.marca }} {{ c.equipamento.modelo }}
+        </div>
+        <div class="text-secondary small">
+          👤 {% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}sem técnico{% endif %}
+        </div>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+{% endif %}
