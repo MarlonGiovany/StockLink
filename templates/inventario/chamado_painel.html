@@ -67,7 +67,10 @@ minuto e o som nunca tocava.
 <body data-ultimo-id="{{ ultimo_id }}"
       data-atrasados="{{ atrasados }}"
       data-intervalo="{{ segundos_atualizacao }}"
-      data-url="{% url 'chamado_painel_dados' %}">
+      data-sentinela="{{ segundos_sentinela }}"
+      data-marca="{{ marca }}"
+      data-url="{% url 'chamado_painel_dados' %}"
+      data-url-sinal="{% url 'chamado_painel_sinal' %}">
 
 <div class="container-fluid py-3">
 
@@ -87,9 +90,13 @@ minuto e o som nunca tocava.
         </span>
       </div>
       <div class="text-secondary">
-        atualizado <span id="painel-agora">{{ agora|date:"d/m/Y H:i" }}</span>
+        atualizado <span id="painel-agora">{{ agora|date:"d/m/Y H:i:s" }}</span>
         · a tela se atualiza sozinha
       </div>
+      {# Com os segundos à vista, dá para saber de longe se o painel está vivo:
+         relógio parado = tela congelada, e o aviso abaixo diz o porquê. #}
+      <div id="aviso-conexao" class="mt-1 fw-bold"
+           style="display:none;color:#FCA5A5;"></div>
     </div>
   </div>
 
@@ -115,8 +122,14 @@ minuto e o som nunca tocava.
 (function () {
   const corpo     = document.body;
   const urlDados  = corpo.dataset.url;
+  const urlSinal  = corpo.dataset.urlSinal;
   const intervalo = (parseInt(corpo.dataset.intervalo, 10) || 15) * 1000;
+  const sentinela = (parseInt(corpo.dataset.sentinela, 10) || 3) * 1000;
   const MINUTOS_ENTRE_SIRENES = 5;
+
+  // Impressão digital do estado dos chamados. Enquanto ela não muda, o painel
+  // não busca nada; quando muda, busca na hora.
+  let marcaAtual = corpo.dataset.marca || '';
 
   let ultimoId     = parseInt(corpo.dataset.ultimoId, 10) || 0;
   let ultimaSirene = 0;   // 0 = nunca tocou; um atraso novo apita na hora
@@ -243,10 +256,47 @@ minuto e o som nunca tocava.
   // ---------------------------------------------------------------
   // Atualização
   // ---------------------------------------------------------------
+  const aviso = document.getElementById('aviso-conexao');
+  let falhas   = 0;      // ciclos seguidos sem resposta boa do servidor
+  let buscando = false;  // pedido em voo — rede lenta não pode empilhar pedidos
+
+  function mostraAviso(texto) {
+    aviso.textContent = texto || '';
+    aviso.style.display = texto ? '' : 'none';
+  }
+
+  /** Deu errado: avisa na tela em vez de morrer calado, como fazia antes. */
+  function falhou(motivo) {
+    falhas += 1;
+    if (motivo === 'sessao') {
+      mostraAviso('⚠ A sessão expirou — recarregue esta tela e faça login.');
+      return;
+    }
+    mostraAviso('⚠ Sem resposta do servidor (tentativa ' + falhas + ')…');
+    // Três ciclos no vácuo: recarrega a página inteira. Perde a liberação do
+    // som até o próximo clique, mas é melhor que a TV exibir, o dia todo, um
+    // quadro parado que ninguém percebe estar parado.
+    if (falhas >= 3) { location.reload(); }
+  }
+
   function atualizar() {
-    fetch(urlDados, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
-      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+    if (buscando) { return; }
+    buscando = true;
+    fetch(urlDados, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      // Sem isto, navegador antigo (TV, PC velho) manda o pedido SEM o cookie
+      // de sessão: o servidor devolve o login e o painel nunca atualiza.
+      credentials: 'same-origin',
+      cache: 'no-store'
+    })
+      .then(function (r) {
+        if (r.status === 401) { return Promise.reject('sessao'); }
+        return r.ok ? r.json() : Promise.reject(r.status);
+      })
       .then(function (d) {
+        falhas = 0;
+        mostraAviso('');
+        marcaAtual = d.marca;
         document.getElementById('painel-cards').innerHTML = d.html;
         document.getElementById('painel-total').textContent   = d.total;
         document.getElementById('painel-total-s').textContent = d.total === 1 ? '' : 's';
@@ -267,7 +317,8 @@ minuto e o som nunca tocava.
         }
         cuidaDoAtraso(d.atrasados);
       })
-      .catch(function () { /* rede caiu: tenta de novo no próximo ciclo */ });
+      .catch(falhou)
+      .then(function () { buscando = false; });
   }
 
   // Se já abriu a tela com chamado atrasado, a sirene não espera o primeiro
@@ -281,7 +332,54 @@ minuto e o som nunca tocava.
     }, 1000);
   }
 
+  if (!window.fetch) {
+    // Navegador antigo demais para buscar em segundo plano (acontece com o
+    // navegador embutido de algumas TVs). Recarregar a página é feio, mas
+    // funciona em qualquer um — melhor isso do que uma tela parada.
+    setInterval(function () { location.reload(); }, intervalo);
+    return;
+  }
+
+  /** Pergunta "mudou alguma coisa?" e só busca os cartões se mudou.
+   *
+   * É isto que faz o chamado aberto na recepção aparecer na área técnica em
+   * segundos, em vez de esperar o ciclo completo. A pergunta é barata (uma
+   * consulta e uns 40 bytes), então pode ser frequente sem pesar no servidor.
+   */
+  function verificarSinal() {
+    // Aba escondida não precisa perguntar: ninguém está olhando, e ao voltar
+    // à frente o `visibilitychange` já busca tudo de uma vez.
+    if (buscando || document.hidden) { return; }
+    fetch(urlSinal, {
+      headers: { 'X-Requested-With': 'XMLHttpRequest' },
+      credentials: 'same-origin',
+      cache: 'no-store'
+    })
+      .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
+      .then(function (d) {
+        if (d.marca !== marcaAtual) { atualizar(); }
+      })
+      // Falha aqui não avisa nada: quem cuida de erro e de sessão caída é o
+      // ciclo completo, logo abaixo. Dois avisos para a mesma queda de rede
+      // só faria a tela piscar mensagem à toa.
+      .catch(function () {});
+  }
+
+  atualizar();                        // não deixa a tela nascer com 15s de atraso
+  setInterval(verificarSinal, sentinela);
+  // O ciclo completo continua: é ele que mantém o relógio andando, vira os
+  // cartões para "mais de 24h" e reporta quando o servidor some.
   setInterval(atualizar, intervalo);
+
+  // O navegador CONGELA os timers de uma aba que não está à frente, e a
+  // máquina que dorme para tudo. Ao voltar (aba focada, monitor religado,
+  // rede de volta), busca na hora em vez de esperar o próximo ciclo — era
+  // isto que obrigava a dar F5 no painel.
+  document.addEventListener('visibilitychange', function () {
+    if (!document.hidden) { atualizar(); }
+  });
+  window.addEventListener('focus', atualizar);
+  window.addEventListener('online', atualizar);
 })();
 </script>
 
