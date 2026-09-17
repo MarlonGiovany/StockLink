@@ -1025,6 +1025,30 @@ def chamado_detalhe(request, pk):
     )
 
 
+def _marca_chamados():
+    """Uma "impressão digital" do estado dos chamados, em UMA consulta só.
+
+    É o que a sentinela do painel compara de 3 em 3 segundos. Muda quando:
+    entra chamado novo (`ultimo` sobe), alguém encerra (`abertos` cai e
+    `ultimo_encerramento` muda). Qualquer uma dessas coisas faz a tela da
+    área técnica buscar os cartões na hora, sem esperar o ciclo de 15s.
+
+    O ponto é o custo: montar o painel inteiro são ~7 consultas mais o HTML
+    de todos os cartões. Isto aqui é uma linha de agregação e uns 40 bytes de
+    resposta — barato o bastante para rodar a cada 3 segundos o dia inteiro.
+    """
+    resumo = Chamado.objects.aggregate(
+        ultimo=Max("id"),
+        abertos=Count("id", filter=Q(status=Chamado.Status.ABERTO)),
+        ultimo_encerramento=Max("encerrado_em"),
+    )
+    return "%s|%s|%s" % (
+        resumo["ultimo"] or 0,
+        resumo["abertos"] or 0,
+        resumo["ultimo_encerramento"] or "",
+    )
+
+
 def _painel_dados():
     """O que o painel da área técnica mostra.
 
@@ -1081,6 +1105,11 @@ def _painel_dados():
         "ultimo_urgente": bool(ultimo and ultimo.urgente),
         "agora": timezone.now(),
         "segundos_atualizacao": 15,
+        # De quanto em quanto tempo a sentinela pergunta "mudou alguma coisa?".
+        # É este número que define em quantos segundos o chamado aberto na
+        # recepção aparece na TV da área técnica.
+        "segundos_sentinela": 3,
+        "marca": _marca_chamados(),
     }
 
 
@@ -1138,7 +1167,6 @@ def chamado_painel(request):
     return render(request, "inventario/chamado_painel.html", _painel_dados())
 
 
-@login_required
 def chamado_painel_dados(request):
     """Os cartões do painel em JSON, para a tela se atualizar sem recarregar.
 
@@ -1149,9 +1177,19 @@ def chamado_painel_dados(request):
 
     O HTML sai do mesmo `_painel_cards.html` que a primeira carga usa — assim
     o cartão é escrito num lugar só.
+
+    **Sem `@login_required` de propósito.** O decorator responde a sessão
+    caída com um *redirect* para a tela de login — que chega no JavaScript
+    como uma página HTML com status 200. O `r.json()` quebrava, o erro caía
+    no `catch` e o painel congelava na TV sem avisar ninguém: a tela continua
+    lá, bonita, mostrando o quadro de meia hora atrás. Respondendo **401 em
+    JSON**, o painel sabe que a sessão caiu e mostra o aviso na tela.
     """
+    if not request.user.is_authenticated:
+        return JsonResponse({"erro": "sessao_expirada"}, status=401)
+
     dados = _painel_dados()
-    return JsonResponse({
+    resposta = JsonResponse({
         "html": render_to_string(
             "inventario/_painel_cards.html", dados, request=request
         ),
@@ -1161,8 +1199,32 @@ def chamado_painel_dados(request):
         "atrasados": dados["atrasados"],
         "ultimo_id": dados["ultimo_id"],
         "ultimo_urgente": dados["ultimo_urgente"],
-        "agora": timezone.localtime(dados["agora"]).strftime("%d/%m/%Y %H:%M"),
+        "marca": dados["marca"],
+        "agora": timezone.localtime(dados["agora"]).strftime("%d/%m/%Y %H:%M:%S"),
     })
+    # O painel pede sempre o estado de AGORA. Uma resposta guardada em cache
+    # (pelo navegador ou por qualquer proxy no caminho) é, literalmente, o
+    # chamado novo não aparecendo na tela.
+    resposta["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resposta
+
+
+def chamado_painel_sinal(request):
+    """A sentinela: responde só "o estado é este" e nada mais.
+
+    O painel pergunta de 3 em 3 segundos. Enquanto a resposta for igual à
+    anterior, ninguém busca nada — a tela fica quieta. Na hora que a recepção
+    salva um chamado, a resposta muda e o painel vai buscar os cartões na
+    mesma hora, apita e pisca.
+
+    É este endereço que faz o chamado aparecer "na hora" na área técnica sem
+    pedir ao servidor que monte o painel inteiro 20 vezes por minuto.
+    """
+    if not request.user.is_authenticated:
+        return JsonResponse({"erro": "sessao_expirada"}, status=401)
+    resposta = JsonResponse({"marca": _marca_chamados()})
+    resposta["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+    return resposta
 
 
 @login_required

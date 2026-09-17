@@ -42,6 +42,10 @@ urlpatterns = [
     path("chamados/painel/", views.chamado_painel, name="chamado_painel"),
     path("chamados/painel/dados/", views.chamado_painel_dados,
          name="chamado_painel_dados"),
+    # Sentinela: consulta barata, de 3 em 3s, que avisa o painel quando entrou
+    # ou saiu chamado — é o que faz a OS aparecer na hora na área técnica.
+    path("chamados/painel/sinal/", views.chamado_painel_sinal,
+         name="chamado_painel_sinal"),
     path("chamados/historico/", views.chamado_historico, name="chamado_historico"),
     path("chamados/<int:pk>/", views.chamado_detalhe, name="chamado_detalhe"),
     path("chamados/<int:pk>/imprimir/", views.chamado_imprimir,
