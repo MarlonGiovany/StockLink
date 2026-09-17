@@ -71,9 +71,17 @@ na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
 {% endif %}
 
 {% if encerrados %}
-  <h2 class="os-secao mt-5 mb-3">
+  {% comment %}
+  Escondidos por padrão. A TV é para o que FALTA fazer: chamado encerrado já
+  foi resolvido e só empurrava para baixo o que importa. Quem quiser conferir
+  clica no título — e a escolha fica guardada naquela tela.
+  {% endcomment %}
+  <button type="button" class="os-secao botao-encerrados mt-5 mb-3"
+          data-toggle-encerrados aria-expanded="false">
+    <span data-seta>▸</span>
     ✅ Encerrados hoje <span class="text-secondary fs-4">({{ qtd_encerrados }})</span>
-  </h2>
+  </button>
+  <div id="bloco-encerrados" hidden>
   <div class="row g-3">
     {% for c in encerrados %}
     <div class="col-xl-4 col-lg-6">
@@ -101,5 +109,6 @@ na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
       </div>
     </div>
     {% endfor %}
+  </div>
   </div>
 {% endif %}
