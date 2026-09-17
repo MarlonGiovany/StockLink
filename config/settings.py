@@ -76,6 +76,7 @@ TEMPLATES = [
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
                 'inventario.context_processors.permissoes',
+                'inventario.context_processors.identidade',
             ],
         },
     },
@@ -167,6 +168,17 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 # Default primary key field type
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+# Identidade que aparece nas telas e nos papéis
+# ----------------------------------------------
+# O nome TÉCNICO do sistema continua StockLink: o repositório, a pasta, o
+# endereço do site e o banco não mudam. O que está aqui é só o que a equipe
+# e o cliente leem na tela e na folha impressa.
+#
+# Trocou o nome da empresa? Muda aqui, em um lugar só — nenhum template
+# repete esse texto.
+NOME_SISTEMA = 'INFORLINK'
+NOME_EMPRESA = 'INFORLINK INOVAÇÕES EM TECNOLOGIA'
 
 # Autenticação
 LOGIN_URL = 'login'
