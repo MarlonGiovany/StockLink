@@ -93,8 +93,10 @@ minuto e o som nunca tocava.
         atualizado <span id="painel-agora">{{ agora|date:"d/m/Y H:i:s" }}</span>
         · a tela se atualiza sozinha
       </div>
-      {# Com os segundos à vista, dá para saber de longe se o painel está vivo:
-         relógio parado = tela congelada, e o aviso abaixo diz o porquê. #}
+      {% comment %}
+      Com os segundos à vista, dá para saber de longe se o painel está vivo:
+      relógio parado = tela congelada, e o aviso abaixo diz o porquê.
+      {% endcomment %}
       <div id="aviso-conexao" class="mt-1 fw-bold"
            style="display:none;color:#FCA5A5;"></div>
     </div>
