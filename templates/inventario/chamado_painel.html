@@ -91,6 +91,7 @@ minuto e o som nunca tocava.
       </div>
       <div class="text-secondary">
         atualizado <span id="painel-agora">{{ agora|date:"d/m/Y H:i:s" }}</span>
+        <span id="painel-desde"></span>
         · a tela se atualiza sozinha
       </div>
       {% comment %}
@@ -267,6 +268,30 @@ minuto e o som nunca tocava.
     aviso.style.display = texto ? '' : 'none';
   }
 
+  // --- Sinal de vida -----------------------------------------------------
+  // O relógio ao lado marca a hora do SERVIDOR na última atualização
+  // completa, então ele anda de 15 em 15s e parece travado. Quem se mexe de
+  // segundo em segundo é este contador, que zera a cada resposta boa — e a
+  // sentinela responde de 3 em 3s, então na prática ele fica entre 0s e 3s.
+  //
+  // De propósito ele NÃO é um relógio local: relógio local continuaria
+  // andando, bonito e mentiroso, com o servidor fora do ar. Um contador que
+  // CRESCE é o que denuncia a tela morta — "há 90s" salta aos olhos.
+  const desde = document.getElementById('painel-desde');
+  let ultimoContato = Date.now();
+
+  function marcaContato() { ultimoContato = Date.now(); }
+
+  function marcaVida() {
+    const s = Math.round((Date.now() - ultimoContato) / 1000);
+    desde.textContent = '· contato há ' + s + 's';
+    // 45s sem contato com a sentinela respondendo de 3 em 3s: algo está errado.
+    desde.style.color = s >= 45 ? '#FCA5A5' : '';
+  }
+
+  marcaVida();                 // desenha já, sem o segundo em branco do começo
+  setInterval(marcaVida, 1000);
+
   /** Deu errado: avisa na tela em vez de morrer calado, como fazia antes. */
   function falhou(motivo) {
     falhas += 1;
@@ -297,6 +322,7 @@ minuto e o som nunca tocava.
       })
       .then(function (d) {
         falhas = 0;
+        marcaContato();
         mostraAviso('');
         marcaAtual = d.marca;
         document.getElementById('painel-cards').innerHTML = d.html;
@@ -359,6 +385,7 @@ minuto e o som nunca tocava.
     })
       .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); })
       .then(function (d) {
+        marcaContato();
         if (d.marca !== marcaAtual) { atualizar(); }
       })
       // Falha aqui não avisa nada: quem cuida de erro e de sessão caída é o
@@ -369,7 +396,7 @@ minuto e o som nunca tocava.
 
   atualizar();                        // não deixa a tela nascer com 15s de atraso
   setInterval(verificarSinal, sentinela);
-  // O ciclo completo continua: é ele que mantém o relógio andando, vira os
+  // O ciclo completo continua: é ele que traz a hora do servidor, vira os
   // cartões para "mais de 24h" e reporta quando o servidor some.
   setInterval(atualizar, intervalo);
 
