@@ -867,13 +867,24 @@ def permissoes_usuarios(request):
 
 # ----- Chamados e Ordem de Serviço -----
 
-def _chamados_filtrados(request):
+def _chamados_filtrados(request, status_padrao=None):
     """Aplica os filtros do painel de chamados e do histórico.
 
     Devolve (queryset, filtros) — `filtros` volta para o template deixar os
     campos preenchidos do jeito que o usuário escolheu.
+
+    `status_padrao` é o status usado quando a pessoa **ainda não escolheu
+    nada** — quando `status` não vem na URL. A distinção importa: o
+    formulário sempre manda o campo, mesmo vazio, e vazio significa "quero
+    todos, escolhi isso". Só o endereço pelado (`/chamados/`) cai no padrão.
+
+    A lista usa isso para abrir mostrando só os chamados em aberto; o
+    histórico não usa, porque histórico sem os encerrados não é histórico.
     """
-    status = request.GET.get("status", "").strip()
+    if "status" in request.GET:
+        status = request.GET["status"].strip()
+    else:
+        status = status_padrao or ""
     tecnico_id = request.GET.get("tecnico", "").strip()
     cliente_id = request.GET.get("cliente", "").strip()
     de = request.GET.get("de", "").strip()
@@ -915,12 +926,23 @@ def _chamados_filtrados(request):
 
 @login_required
 def chamado_lista(request):
-    """Painel de chamados: tudo que a recepção abriu, com filtros."""
-    chamados, filtros = _chamados_filtrados(request)
+    """Painel de chamados: tudo que a recepção abriu, com filtros.
+
+    Abre mostrando **só os chamados em aberto** — que é o que alguém quer ver
+    ao entrar aqui. Os encerrados só se acumulam, e depois de alguns meses
+    eram eles que dominavam a tela. Ficam a um clique de distância, no botão
+    do topo.
+    """
+    chamados, filtros = _chamados_filtrados(
+        request, status_padrao=Chamado.Status.ABERTO
+    )
     contexto = {
         "chamados": chamados,
         "total": chamados.count(),
         "abertos": Chamado.objects.filter(status=Chamado.Status.ABERTO).count(),
+        "qtd_encerrados": Chamado.objects.filter(
+            status=Chamado.Status.ENCERRADO
+        ).count(),
     }
     contexto.update(filtros)
     return render(request, "inventario/chamado_lista.html", contexto)

@@ -4,7 +4,10 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
-    <h4 class="mb-0">Painel de chamados
+    <h4 class="mb-0">
+      {% if status == "ENCERRADO" %}Chamados encerrados
+      {% elif status == "ABERTO" %}Chamados em aberto
+      {% else %}Painel de chamados{% endif %}
       <span class="text-muted fs-6">({{ total }})</span>
     </h4>
     {% if abertos %}
@@ -14,6 +17,26 @@
     {% endif %}
   </div>
   <div class="d-flex gap-2">
+    {% comment %}
+    A tela abre só com os chamados em aberto. Estes botões são o caminho
+    para os encerrados — que continuam todos guardados, só não ocupam a
+    tela de quem entrou aqui para ver o que falta fazer.
+    {% endcomment %}
+    <div class="btn-group" role="group">
+      <a href="{% url 'chamado_lista' %}?status=ABERTO"
+         class="btn {% if status == 'ABERTO' %}btn-primary{% else %}btn-outline-primary{% endif %}">
+        Em aberto
+      </a>
+      <a href="{% url 'chamado_lista' %}?status=ENCERRADO"
+         class="btn {% if status == 'ENCERRADO' %}btn-success{% else %}btn-outline-success{% endif %}">
+        ✅ Encerrados
+        {% if qtd_encerrados %}<span class="badge bg-light text-dark ms-1">{{ qtd_encerrados }}</span>{% endif %}
+      </a>
+      <a href="{% url 'chamado_lista' %}?status="
+         class="btn {% if not status %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
+        Todos
+      </a>
+    </div>
     <a href="{% url 'chamado_painel' %}" class="btn btn-outline-secondary" target="_blank">
       🖥️ Painel da área técnica
     </a>
@@ -71,7 +94,7 @@
   <div class="col-md-3">
     <button class="btn btn-primary w-100">Filtrar</button>
   </div>
-  {% if cliente or status or tecnico or de or ate %}
+  {% if cliente or tecnico or de or ate or status != "ABERTO" %}
   <div class="col-md-3">
     <a href="{% url 'chamado_lista' %}" class="btn btn-outline-secondary w-100">Limpar</a>
   </div>

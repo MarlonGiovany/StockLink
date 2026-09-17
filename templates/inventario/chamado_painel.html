@@ -40,6 +40,13 @@ minuto e o som nunca tocava.
     .os-tecnico { font-size:1.1rem; color:#FACC15; font-weight:600; }
     .os-espera { font-size:1.05rem; color:#FCA5A5; }
     .os-secao { border-top:2px solid #334155; padding-top:1.25rem; }
+    /* Era um <h2>; virou botão para poder recolher. Continua com cara de
+       título de seção — só ganhou a seta e o cursor de clique. */
+    .botao-encerrados { display:block; width:100%; text-align:left;
+                        background:none; border:0; border-top:2px solid #334155;
+                        color:#E2E8F0; font-size:2rem; font-weight:500;
+                        cursor:pointer; }
+    .botao-encerrados:hover { color:#93C5FD; }
     .cabecalho { border-bottom:2px solid #334155; }
 
     /* --- Passou de 24h: tem que saltar aos olhos do outro lado da sala --- */
@@ -282,6 +289,42 @@ minuto e o som nunca tocava.
 
   function marcaContato() { ultimoContato = Date.now(); }
 
+  // --- Encerrados hoje: escondidos até alguém pedir ----------------------
+  // A TV existe para o que FALTA fazer. A escolha de abrir precisa sobreviver
+  // a duas coisas: às atualizações (que reescrevem os cartões inteiros) e ao
+  // reload. Por isso fica guardada no navegador daquela tela.
+  const cartoes = document.getElementById('painel-cards');
+  let mostrarEncerrados = false;
+  try {
+    mostrarEncerrados = localStorage.getItem('painelEncerrados') === '1';
+  } catch (e) { /* navegador sem armazenamento: começa recolhido, e tudo bem */ }
+
+  function aplicaEncerrados() {
+    const bloco = document.getElementById('bloco-encerrados');
+    if (!bloco) { return; }          // nenhum encerrado hoje: não há bloco
+    bloco.hidden = !mostrarEncerrados;
+    const botao = cartoes.querySelector('[data-toggle-encerrados]');
+    if (botao) { botao.setAttribute('aria-expanded', mostrarEncerrados); }
+    const seta = cartoes.querySelector('[data-seta]');
+    if (seta) { seta.textContent = mostrarEncerrados ? '▾' : '▸'; }
+  }
+
+  // Delegação: o botão é reescrito a cada atualização, mas o container que
+  // ouve o clique nunca é trocado — sem isto o botão pararia de funcionar
+  // 15 segundos depois de a tela abrir.
+  cartoes.addEventListener('click', function (ev) {
+    if (!ev.target.closest || !ev.target.closest('[data-toggle-encerrados]')) {
+      return;
+    }
+    mostrarEncerrados = !mostrarEncerrados;
+    try {
+      localStorage.setItem('painelEncerrados', mostrarEncerrados ? '1' : '0');
+    } catch (e) { /* sem armazenamento: vale para esta sessão */ }
+    aplicaEncerrados();
+  });
+
+  aplicaEncerrados();                // primeira carga da página
+
   function marcaVida() {
     const s = Math.round((Date.now() - ultimoContato) / 1000);
     desde.textContent = '· contato há ' + s + 's';
@@ -326,6 +369,7 @@ minuto e o som nunca tocava.
         mostraAviso('');
         marcaAtual = d.marca;
         document.getElementById('painel-cards').innerHTML = d.html;
+        aplicaEncerrados();          // os cartões são novos; a escolha é a mesma
         document.getElementById('painel-total').textContent   = d.total;
         document.getElementById('painel-total-s').textContent = d.total === 1 ? '' : 's';
         document.getElementById('painel-agora').textContent   = d.agora;
