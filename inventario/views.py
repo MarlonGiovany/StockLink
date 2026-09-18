@@ -522,7 +522,7 @@ def contrato_lista(request):
         contratos = contratos.filter(data_contrato__lte=ate)
 
     campo = ORDENS_CONTRATO.get(ordenar, ORDENS_CONTRATO["data_desc"])[0]
-    contratos = contratos.order_by(campo, "-id")
+    contratos = list(contratos.order_by(campo, "-id"))
 
     contexto = {
         "contratos": contratos,
@@ -531,7 +531,10 @@ def contrato_lista(request):
         "de": de,
         "ate": ate,
         "ordens": ORDENS_CONTRATO,
-        "total": contratos.count(),
+        "total": len(contratos),
+        # Renovação automática de 1 ano — aviso só pra quem está perto do
+        # aniversário (ver Contrato.DIAS_ATE_RENOVACAO), calculado na hora.
+        "qtd_renovando": sum(1 for c in contratos if c.renovacao_proxima),
     }
     return render(request, "inventario/contrato_lista.html", contexto)
 
