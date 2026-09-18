@@ -54,7 +54,7 @@
         <div class="mb-2">
           <strong>Máquina:</strong>
           <a href="{% url 'equipamento_detalhe' chamado.equipamento.pk %}">
-            Pat. {{ chamado.equipamento.numero_patrimonio }}
+            INF-{{ chamado.equipamento.numero_patrimonio }}
           </a>
           <div class="small text-muted">
             {% if chamado.equipamento.produto %}{{ chamado.equipamento.produto }} · {% endif %}

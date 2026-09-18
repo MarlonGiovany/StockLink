@@ -90,7 +90,8 @@ class Equipamento(models.Model):
     modelo = models.CharField("Modelo", max_length=80)
     numero_serie = models.CharField("Número de série", max_length=80, blank=True)
     numero_patrimonio = models.CharField(
-        "Número de patrimônio", max_length=80, unique=True
+        "INF", max_length=80, unique=True,
+        help_text="Número da etiqueta INF colada no equipamento.",
     )
 
     # Ficha técnica — só aparece para produtos com pede_configuracao=True
@@ -126,7 +127,7 @@ class Equipamento(models.Model):
         ordering = ["marca", "modelo"]
 
     def __str__(self):
-        return f"{self.marca} {self.modelo} (Pat. {self.numero_patrimonio})"
+        return f"{self.marca} {self.modelo} (INF-{self.numero_patrimonio})"
 
     @property
     def locacao_ativa(self):
@@ -337,7 +338,7 @@ class Aditivo(models.Model):
     )
     descricao = models.CharField(
         "Equipamento / descrição", max_length=200,
-        help_text='Ex.: "Notebook Lenovo (Pat. 8974)", "1 máquina removida"...',
+        help_text='Ex.: "Notebook Lenovo (INF-8974)", "1 máquina removida"...',
     )
     valor = models.DecimalField(
         "Valor do equipamento", max_digits=12, decimal_places=2,

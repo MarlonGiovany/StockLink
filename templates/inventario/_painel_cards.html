@@ -36,7 +36,7 @@ na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
           <div class="os-cliente mb-1">🏢 {{ c.cliente }}</div>
         {% endif %}
         <div class="os-maquina mb-1">
-          Pat. {{ c.equipamento.numero_patrimonio }}
+          INF-{{ c.equipamento.numero_patrimonio }}
         </div>
         <div class="text-secondary mb-2">
           {% if c.equipamento.produto %}{{ c.equipamento.produto }} · {% endif %}
@@ -99,7 +99,7 @@ na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
           </div>
         </div>
         {% if c.cliente %}<div class="os-cliente-pequeno mb-1">🏢 {{ c.cliente }}</div>{% endif %}
-        <div class="mb-1">Pat. {{ c.equipamento.numero_patrimonio }}</div>
+        <div class="mb-1">INF-{{ c.equipamento.numero_patrimonio }}</div>
         <div class="text-secondary small mb-2">
           {{ c.equipamento.marca }} {{ c.equipamento.modelo }}
         </div>
