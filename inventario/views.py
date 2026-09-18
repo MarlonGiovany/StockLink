@@ -7,7 +7,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied
-from django.db.models import Case, Count, IntegerField, Max, Q, Value, When
+from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
@@ -706,6 +706,11 @@ def contrato_detalhe(request, pk):
         # listando também as locações encerradas, como histórico do contrato.
         "qtd_maquinas": locacoes.filter(ativa=True).count(),
         "qtd_encerradas": locacoes.filter(ativa=False).count(),
+        # Soma o valor só das locações ativas — mesmo recorte do contador acima.
+        # Recalculado a cada carregamento da página, nunca fica desatualizado.
+        "valor_total_maquinas": locacoes.filter(ativa=True).aggregate(
+            total=Sum("valor")
+        )["total"],
         "valor_lote_form": ValorEmLoteForm(),
     }
     return render(request, "inventario/contrato_detalhe.html", contexto)
