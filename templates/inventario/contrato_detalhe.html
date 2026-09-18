@@ -31,6 +31,9 @@
             {% if perms.inventario.change_contrato %}
               <a href="{% url 'contrato_editar' contrato.pk %}" class="small ms-2">alterar</a>
             {% endif %}</td></tr>
+        <tr><th>Valor total cobrado de máquinas no contrato</th>
+            <td><strong>{% if valor_total_maquinas %}R$ {{ valor_total_maquinas|floatformat:2 }}{% else %}—{% endif %}</strong>
+            <span class="text-muted small ms-2">soma automática das máquinas ativas abaixo</span></td></tr>
         <tr><th>Observações</th><td>{{ contrato.observacoes|default:"—"|linebreaksbr }}</td></tr>
       </table>
     </div></div>
