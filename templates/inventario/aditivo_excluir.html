@@ -8,6 +8,18 @@
       <p>Tem certeza que deseja excluir o <strong>aditivo {{ aditivo.numero }}</strong>
          ({{ aditivo.get_tipo_display }} — {{ aditivo.descricao }})
          do contrato <strong>{{ contrato.numero }}</strong>?</p>
+      {% if locacoes %}
+        <p class="text-danger">
+          Este aditivo incluiu {{ locacoes|length }} máquina{{ locacoes|pluralize }} no
+          contrato. Excluir o aditivo também desfaz essa inclusão — elas voltam
+          a ficar <strong>Disponíveis</strong>:
+        </p>
+        <ul class="small">
+          {% for l in locacoes %}
+            <li>Pat. {{ l.equipamento.numero_patrimonio }} — {{ l.equipamento.marca }} {{ l.equipamento.modelo }}</li>
+          {% endfor %}
+        </ul>
+      {% endif %}
       <form method="post">
         {% csrf_token %}
         <button class="btn btn-danger">Sim, excluir</button>

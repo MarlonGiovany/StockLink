@@ -194,6 +194,11 @@ class Locacao(models.Model):
         "Contrato", on_delete=models.SET_NULL, null=True, blank=True,
         related_name="locacoes", verbose_name="Contrato",
     )
+    aditivo = models.ForeignKey(
+        "Aditivo", on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="locacoes", verbose_name="Aditivo",
+        help_text="Aditivo que incluiu esta máquina no contrato, quando veio por um.",
+    )
     valor = models.DecimalField("Valor da locação", max_digits=12, decimal_places=2)
     data_inicio = models.DateField("Início do contrato")
     data_fim = models.DateField("Término do contrato", null=True, blank=True)

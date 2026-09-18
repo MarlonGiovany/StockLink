@@ -76,7 +76,7 @@
                   </th>
                 {% endif %}
                 <th>Patrimônio</th><th>Produto</th><th>Equipamento</th>
-                <th class="text-end">Valor</th><th>Início</th><th>Situação</th><th></th>
+                <th class="text-end">Valor</th><th>Início</th><th>Aditivo</th><th>Situação</th><th></th>
               </tr>
             </thead>
             <tbody>
@@ -95,6 +95,16 @@
                 <td>{{ l.equipamento.marca }} {{ l.equipamento.modelo }}</td>
                 <td class="text-end">R$ {{ l.valor|floatformat:2 }}</td>
                 <td>{{ l.data_inicio|date:"d/m/Y" }}</td>
+                <td>
+                  {% if l.aditivo %}
+                    Nº {{ l.aditivo.numero }}
+                    {% if l.aditivo.arquivo and pode_ver_pdfs %}
+                      · <a href="{% url 'aditivo_pdf' l.aditivo.pk %}" target="_blank">📄</a>
+                    {% endif %}
+                  {% else %}
+                    <span class="text-muted">—</span>
+                  {% endif %}
+                </td>
                 <td>
                   {% if l.ativa %}
                     <span class="badge bg-success">Ativa</span>
@@ -157,7 +167,7 @@
           <thead class="table-light">
             <tr>
               <th>Nº</th><th>Operação</th><th>Equipamento / descrição</th>
-              <th class="text-end">Valor do equip.</th>
+              <th class="text-end">Valor do(s) equip.</th>
               <th>Data</th><th>PDF</th><th></th>
             </tr>
           </thead>

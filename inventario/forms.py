@@ -253,6 +253,27 @@ class ContratoForm(BootstrapFormMixin, forms.ModelForm):
 
 
 class AditivoForm(BootstrapFormMixin, forms.ModelForm):
+    """Registra o aditivo e, quando for Adição, já inclui as máquinas marcadas.
+
+    `descricao` e `valor` continuam existindo para o registro manual de
+    sempre (principalmente Remoção, que não passa por seleção de máquinas).
+    Quando `equipamentos` vem marcado, os dois são preenchidos sozinhos: a
+    descrição lista as máquinas, e o valor vira a **soma do valor real de
+    cada uma** — cada máquina tem seu próprio campo de valor no template
+    (`valor_equip_<id>`, lido direto do POST na view, não é campo deste
+    form) porque o preço pode variar de máquina pra máquina dentro do
+    mesmo aditivo; não faz sentido forçar todas ao mesmo valor.
+    """
+
+    equipamentos = forms.ModelMultipleChoiceField(
+        queryset=Equipamento.objects.none(),
+        required=False,
+        label="Máquinas incluídas neste aditivo",
+        widget=forms.CheckboxSelectMultiple,
+        help_text="Só aparecem as máquinas com status Disponível — as demais já "
+                  "estão locadas, em manutenção ou baixadas.",
+    )
+
     class Meta:
         model = Aditivo
         fields = ["tipo", "descricao", "valor", "data", "arquivo", "observacoes"]
@@ -261,11 +282,36 @@ class AditivoForm(BootstrapFormMixin, forms.ModelForm):
             "observacoes": forms.Textarea(attrs={"rows": 2}),
         }
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["equipamentos"].queryset = (
+            Equipamento.objects.filter(status=Equipamento.Status.DISPONIVEL)
+            .select_related("produto")
+            .order_by("numero_patrimonio")
+        )
+        # O mixin bootstrap marca todo campo fora de select/checkbox único como
+        # "form-control"; aqui é uma lista de checkboxes, então corrige a classe.
+        self.fields["equipamentos"].widget.attrs["class"] = "form-check-input"
+        # Preenchidos automaticamente quando há máquinas marcadas (ver clean()).
+        self.fields["descricao"].required = False
+        self.fields["valor"].required = False
+
     def clean_arquivo(self):
         arquivo = self.cleaned_data.get("arquivo")
         if arquivo and getattr(arquivo, "name", "") and not arquivo.name.lower().endswith(".pdf"):
             raise forms.ValidationError("O aditivo precisa estar em PDF (.pdf).")
         return arquivo
+
+    def clean(self):
+        dados = super().clean()
+        equipamentos = dados.get("equipamentos")
+        if not equipamentos and not dados.get("descricao"):
+            self.add_error(
+                "descricao",
+                "Marque ao menos uma máquina disponível acima, ou descreva a "
+                "alteração manualmente (é o caso de uma Remoção, por exemplo).",
+            )
+        return dados
 
 
 class EquipamentoSelect(forms.Select):
