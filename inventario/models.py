@@ -216,7 +216,18 @@ class Locacao(models.Model):
 
 
 class Contrato(models.Model):
-    """Contrato (feito no Word e salvo em PDF) anexado ao sistema."""
+    """Contrato (feito no Word e salvo em PDF) anexado ao sistema.
+
+    Todo contrato tem vigência de 1 ano a partir de `data_contrato`, com
+    renovação automática se ninguém conversar sobre isso até lá — não existe
+    uma data de término real gravada no banco. O aviso de renovação avisa
+    que a data de aniversário está chegando, não que o contrato "vai
+    vencer": nada quebra sozinho se ninguém fizer nada.
+    """
+
+    # Quantos dias antes do aniversário o contrato já aparece como "perto de
+    # renovar" na listagem.
+    DIAS_ATE_RENOVACAO = 15
 
     numero = models.CharField("Número do contrato", max_length=50, db_index=True)
     titulo = models.CharField("Título / objeto", max_length=200, blank=True)
@@ -265,6 +276,41 @@ class Contrato(models.Model):
         contrato, mas não entra nesta conta — é ela que aparece nas telas.
         """
         return self.locacoes.filter(ativa=True).count()
+
+    @property
+    def proxima_renovacao(self):
+        """Próxima data de aniversário do contrato (1 ano de vigência).
+
+        Sempre no futuro (hoje inclusive) — soma quantos anos forem
+        necessários a partir de `data_contrato` até passar de hoje. Calculado
+        na hora, não salvo: não existe "data de término" gravada no banco.
+        """
+        if not self.data_contrato:
+            return None
+        hoje = timezone.now().date()
+        aniversario = self.data_contrato
+        while aniversario < hoje:
+            try:
+                aniversario = aniversario.replace(year=aniversario.year + 1)
+            except ValueError:
+                # 29/02 num ano não bissexto: cai pro 1º de março.
+                aniversario = aniversario.replace(
+                    month=3, day=1, year=aniversario.year
+                )
+        return aniversario
+
+    @property
+    def dias_ate_renovacao(self):
+        proxima = self.proxima_renovacao
+        if proxima is None:
+            return None
+        return (proxima - timezone.now().date()).days
+
+    @property
+    def renovacao_proxima(self):
+        """True quando a renovação automática está a poucos dias de acontecer."""
+        dias = self.dias_ate_renovacao
+        return dias is not None and dias <= self.DIAS_ATE_RENOVACAO
 
 
 class Aditivo(models.Model):
