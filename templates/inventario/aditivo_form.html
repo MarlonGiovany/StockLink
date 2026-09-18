@@ -2,30 +2,186 @@
 {% block titulo %}Novo aditivo — Contrato {{ contrato.numero }}{% endblock %}
 {% block conteudo %}
 <div class="row justify-content-center">
-  <div class="col-lg-7">
+  <div class="col-lg-8">
     <a href="{% url 'contrato_detalhe' contrato.pk %}" class="text-muted text-decoration-none">&larr; Contrato {{ contrato.numero }}</a>
     <h4 class="mt-1 mb-1">Novo aditivo do contrato {{ contrato.numero }}</h4>
     <p class="text-muted">
-      Registre uma alteração do contrato (ex.: adição/remoção de máquinas).
-      É apenas um registro no histórico — <strong>não altera o valor do contrato</strong>,
-      que continua sendo o definido manualmente
+      Numa <strong>Adição</strong>, marque as máquinas disponíveis abaixo — elas
+      são vinculadas ao contrato e a este aditivo automaticamente. Isso
+      <strong>não altera o valor do contrato</strong>, que continua sendo o
+      definido manualmente
       ({% if contrato.valor %}R$ {{ contrato.valor|floatformat:2 }}{% else %}sem valor{% endif %}).
     </p>
+
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
+
     <div class="card shadow-sm"><div class="card-body">
       <form method="post" enctype="multipart/form-data" novalidate>
         {% csrf_token %}
-        {% for field in form %}
+
         <div class="mb-3">
-          <label class="form-label">{{ field.label }}</label>
-          {{ field }}
-          {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-          {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
+          <label class="form-label">{{ form.tipo.label }}</label>
+          {{ form.tipo }}
+          {% if form.tipo.errors %}<div class="text-danger small">{{ form.tipo.errors|striptags }}</div>{% endif %}
         </div>
-        {% endfor %}
+
+        <div id="bloco-maquinas" class="mb-3 border rounded-3 p-2" style="background:#f8fafc;">
+          <label class="form-label mb-1">{{ form.equipamentos.label }}</label>
+          {% if form.equipamentos.field.queryset %}
+            <div class="mb-2 d-flex align-items-center">
+              <input type="checkbox" class="form-check-input me-1" id="marcar-todas-maquinas">
+              <label for="marcar-todas-maquinas" class="small mb-0">Marcar todas</label>
+              <span class="small text-muted ms-2">(<span id="conta-marcadas-maquinas">0</span> marcada(s))</span>
+            </div>
+            <div style="max-height:20rem; overflow-y:auto;">
+              {% for escolha in form.equipamentos %}
+                <div class="form-check-maquina d-flex align-items-center gap-2 py-1 border-bottom">
+                  <div class="form-check mb-0 flex-grow-1">
+                    {{ escolha.tag }}
+                    <label class="form-check-label" for="{{ escolha.id_for_label }}">{{ escolha.choice_label }}</label>
+                  </div>
+                  <input type="number" step="0.01" min="0.01"
+                         class="form-control form-control-sm valor-maquina-individual"
+                         style="max-width:9rem;" placeholder="Valor (R$)" disabled
+                         name="valor_equip_{{ escolha.data.value }}">
+                </div>
+              {% endfor %}
+            </div>
+          {% else %}
+            <p class="text-muted small mb-0">Nenhuma máquina disponível no momento.</p>
+          {% endif %}
+          {% if form.equipamentos.errors %}<div class="text-danger small">{{ form.equipamentos.errors|striptags }}</div>{% endif %}
+          <div class="form-text mb-2">
+            Só aparecem máquinas com status Disponível. Cada uma tem seu
+            próprio valor — não precisam ser iguais.
+          </div>
+
+          <div class="row g-2 align-items-end">
+            <div class="col-md-5">
+              <label class="form-label small text-muted mb-1" for="valor-lote-ajuda">
+                Aplicar um valor a todas as marcadas (atalho)
+              </label>
+              <input type="number" step="0.01" min="0.01" id="valor-lote-ajuda"
+                     class="form-control" placeholder="Ex.: 250,00">
+            </div>
+            <div class="col-md-4">
+              <button type="button" id="aplicar-valor-lote" class="btn btn-outline-secondary w-100">
+                Aplicar às marcadas
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.descricao.label }}</label>
+          {{ form.descricao }}
+          <div class="form-text">Deixe em branco ao marcar máquinas acima — a descrição sai sozinha, listando as máquinas.</div>
+          {% if form.descricao.errors %}<div class="text-danger small">{{ form.descricao.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.valor.label }}</label>
+          {{ form.valor }}
+          <div class="form-text">Preenchido sozinho ao marcar máquinas (soma do valor delas). Preencha à mão só quando não marcar nenhuma — ex.: numa Remoção.</div>
+          {% if form.valor.errors %}<div class="text-danger small">{{ form.valor.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.data.label }}</label>
+          {{ form.data }}
+          {% if form.data.errors %}<div class="text-danger small">{{ form.data.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.arquivo.label }}</label>
+          {{ form.arquivo }}
+          <div class="form-text">PDF do contrato/aditivo que formaliza esta alteração.</div>
+          {% if form.arquivo.errors %}<div class="text-danger small">{{ form.arquivo.errors|striptags }}</div>{% endif %}
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">{{ form.observacoes.label }}</label>
+          {{ form.observacoes }}
+          {% if form.observacoes.errors %}<div class="text-danger small">{{ form.observacoes.errors|striptags }}</div>{% endif %}
+        </div>
+
         <button class="btn text-white" style="background:#16A34A;">Salvar aditivo</button>
         <a href="{% url 'contrato_detalhe' contrato.pk %}" class="btn btn-outline-secondary">Cancelar</a>
       </form>
     </div></div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const todas = document.getElementById('marcar-todas-maquinas');
+  const bloco = document.getElementById('bloco-maquinas');
+  const linhas = bloco ? bloco.querySelectorAll('.form-check-maquina') : [];
+
+  // O campo de valor de cada máquina só fica ativo (e só é enviado no
+  // formulário) enquanto a máquina estiver marcada — por isso "disabled"
+  // no HTML: input desabilitado não é enviado, então máquina desmarcada
+  // nunca exige valor.
+  function atualizaLinha(linha) {
+    const check = linha.querySelector('input[type=checkbox]');
+    const valorInput = linha.querySelector('.valor-maquina-individual');
+    valorInput.disabled = !check.checked;
+    if (!check.checked) valorInput.value = '';
+  }
+
+  if (todas) {
+    const marcas = bloco.querySelectorAll('input[type=checkbox]:not(#marcar-todas-maquinas)');
+    const conta  = document.getElementById('conta-marcadas-maquinas');
+
+    function atualizaConta() {
+      const n = bloco.querySelectorAll('input[type=checkbox]:checked:not(#marcar-todas-maquinas)').length;
+      if (conta) conta.textContent = n;
+      todas.indeterminate = n > 0 && n < marcas.length;
+      todas.checked = n === marcas.length && n > 0;
+    }
+
+    todas.addEventListener('change', function () {
+      marcas.forEach(function (c) { c.checked = todas.checked; });
+      linhas.forEach(atualizaLinha);
+      atualizaConta();
+    });
+    linhas.forEach(function (linha) {
+      const check = linha.querySelector('input[type=checkbox]');
+      check.addEventListener('change', function () {
+        atualizaLinha(linha);
+        atualizaConta();
+      });
+    });
+    atualizaConta();
+  }
+
+  const aplicarBtn = document.getElementById('aplicar-valor-lote');
+  const valorLote  = document.getElementById('valor-lote-ajuda');
+  if (aplicarBtn) {
+    aplicarBtn.addEventListener('click', function () {
+      if (!valorLote.value) return;
+      linhas.forEach(function (linha) {
+        const check = linha.querySelector('input[type=checkbox]');
+        const valorInput = linha.querySelector('.valor-maquina-individual');
+        if (check.checked) valorInput.value = valorLote.value;
+      });
+    });
+  }
+
+  // Some com o bloco de máquinas quando o tipo escolhido for Remoção — essa
+  // continua sendo um registro manual, sem seleção de máquinas.
+  const tipo = document.getElementById('{{ form.tipo.id_for_label }}');
+  if (tipo && bloco) {
+    function atualizaBloco() {
+      bloco.style.display = tipo.value === 'REMOCAO' ? 'none' : '';
+    }
+    tipo.addEventListener('change', atualizaBloco);
+    atualizaBloco();
+  }
+})();
+</script>
 {% endblock %}

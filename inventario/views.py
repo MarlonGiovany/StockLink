@@ -1,12 +1,14 @@
 import json
 import os
 from datetime import timedelta
+from decimal import Decimal, InvalidOperation
 
 from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied
+from django.db import transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -724,14 +726,115 @@ def aditivo_novo(request, pk):
     if request.method == "POST":
         form = AditivoForm(request.POST, request.FILES)
         if form.is_valid():
-            aditivo = form.save(commit=False)
-            proximo = (contrato.aditivos.aggregate(m=Max("numero"))["m"] or 0) + 1
-            aditivo.contrato = contrato
-            aditivo.numero = proximo
-            aditivo.criado_por = request.user
-            aditivo.save()
-            messages.success(request, f"Aditivo {proximo} registrado.")
-            return redirect("contrato_detalhe", pk=contrato.pk)
+            equipamentos = list(form.cleaned_data.get("equipamentos") or [])
+
+            if equipamentos and not contrato.cliente_id:
+                form.add_error(
+                    None,
+                    "Este contrato ainda não tem cliente definido. Edite o "
+                    "contrato e escolha o cliente antes de incluir máquinas "
+                    "por aditivo.",
+                )
+            else:
+                # Revalida no servidor: a lista pode ter ficado desatualizada
+                # entre abrir a tela e salvar (outra pessoa aditivou a mesma
+                # máquina nesse meio-tempo).
+                ids = [e.pk for e in equipamentos]
+                disponiveis_ids = set(
+                    Equipamento.objects.filter(
+                        pk__in=ids, status=Equipamento.Status.DISPONIVEL
+                    ).values_list("pk", flat=True)
+                )
+                indisponiveis = [e for e in equipamentos if e.pk not in disponiveis_ids]
+                if indisponiveis:
+                    nomes = ", ".join(
+                        f"Pat. {e.numero_patrimonio}" for e in indisponiveis
+                    )
+                    form.add_error(
+                        "equipamentos",
+                        f"Estas máquinas deixaram de estar disponíveis enquanto "
+                        f"o formulário estava aberto: {nomes}. Atualize a "
+                        f"página e tente de novo.",
+                    )
+                else:
+                    # Cada máquina marcada tem seu próprio campo de valor no
+                    # POST (valor_equip_<id>) — o preço pode variar de máquina
+                    # pra máquina dentro do mesmo aditivo, então não dá pra
+                    # aplicar um valor único a todas.
+                    valores = {}
+                    erro_valor = None
+                    for equipamento in equipamentos:
+                        bruto = request.POST.get(
+                            f"valor_equip_{equipamento.pk}", ""
+                        ).strip().replace(",", ".")
+                        try:
+                            valor = Decimal(bruto)
+                            if valor <= 0:
+                                raise InvalidOperation
+                        except (InvalidOperation, ValueError):
+                            erro_valor = (
+                                f"Informe um valor válido para a máquina "
+                                f"Pat. {equipamento.numero_patrimonio}."
+                            )
+                            break
+                        valores[equipamento.pk] = valor
+
+                    if erro_valor:
+                        form.add_error("equipamentos", erro_valor)
+                    else:
+                        with transaction.atomic():
+                            aditivo = form.save(commit=False)
+                            proximo = (
+                                contrato.aditivos.aggregate(m=Max("numero"))["m"] or 0
+                            ) + 1
+                            aditivo.contrato = contrato
+                            aditivo.numero = proximo
+                            aditivo.criado_por = request.user
+
+                            if equipamentos:
+                                if not aditivo.descricao:
+                                    nomes = ", ".join(
+                                        f"Pat. {e.numero_patrimonio}" for e in equipamentos
+                                    )
+                                    aditivo.descricao = (
+                                        f"{len(equipamentos)} máquina(s) incluída(s): {nomes}"
+                                    )
+                                # Soma o valor real de cada máquina — elas podem
+                                # ter preços diferentes entre si.
+                                aditivo.valor = sum(valores.values())
+
+                            aditivo.save()
+
+                            for equipamento in equipamentos:
+                                valor = valores[equipamento.pk]
+                                Locacao.objects.create(
+                                    equipamento=equipamento,
+                                    cliente=contrato.cliente,
+                                    contrato=contrato,
+                                    aditivo=aditivo,
+                                    valor=valor,
+                                    data_inicio=aditivo.data,
+                                    ativa=True,
+                                )
+                                equipamento.status = Equipamento.Status.LOCADO
+                                equipamento.save(update_fields=["status"])
+                                registrar_movimentacao(
+                                    equipamento, Movimentacao.Tipo.LOCACAO,
+                                    f"Locado para {contrato.cliente} por "
+                                    f"R$ {_reais(valor)} via Aditivo {proximo} "
+                                    f"do contrato Nº {contrato.numero}.",
+                                    request.user,
+                                )
+
+                        if equipamentos:
+                            messages.success(
+                                request,
+                                f"Aditivo {proximo} registrado com "
+                                f"{len(equipamentos)} máquina(s) incluída(s).",
+                            )
+                        else:
+                            messages.success(request, f"Aditivo {proximo} registrado.")
+                        return redirect("contrato_detalhe", pk=contrato.pk)
     else:
         form = AditivoForm()
     return render(
@@ -754,16 +857,43 @@ def aditivo_excluir(request, pk):
             "Só é possível excluir o aditivo mais recente do contrato.",
         )
         return redirect("contrato_detalhe", pk=contrato.pk)
+    # Máquinas que este aditivo incluiu: excluir o aditivo desfaz a inclusão
+    # delas também, senão ficariam "Locadas" num contrato sem nenhum aditivo
+    # ou locação que explique por quê.
+    locacoes = list(aditivo.locacoes.select_related("equipamento"))
     if request.method == "POST":
         numero = aditivo.numero
-        if aditivo.arquivo:
-            aditivo.arquivo.delete(save=False)
-        aditivo.delete()
-        messages.success(request, f"Aditivo {numero} excluído.")
+        with transaction.atomic():
+            for locacao in locacoes:
+                equipamento = locacao.equipamento
+                locacao.delete()
+                # Só devolve a máquina a Disponível se não sobrar outra
+                # locação ativa dela — não deveria acontecer, mas por
+                # segurança não mexe no status se sobrar alguma.
+                if not equipamento.locacoes.filter(ativa=True).exists():
+                    equipamento.status = Equipamento.Status.DISPONIVEL
+                    equipamento.save(update_fields=["status"])
+                registrar_movimentacao(
+                    equipamento, Movimentacao.Tipo.EDICAO,
+                    f"Inclusão desfeita: o Aditivo {numero} do contrato "
+                    f"Nº {contrato.numero} foi excluído.",
+                    request.user,
+                )
+            if aditivo.arquivo:
+                aditivo.arquivo.delete(save=False)
+            aditivo.delete()
+        if locacoes:
+            messages.success(
+                request,
+                f"Aditivo {numero} excluído — {len(locacoes)} máquina(s) "
+                f"voltaram a ficar disponíveis.",
+            )
+        else:
+            messages.success(request, f"Aditivo {numero} excluído.")
         return redirect("contrato_detalhe", pk=contrato.pk)
     return render(
         request, "inventario/aditivo_excluir.html",
-        {"aditivo": aditivo, "contrato": contrato},
+        {"aditivo": aditivo, "contrato": contrato, "locacoes": locacoes},
     )
 
 
