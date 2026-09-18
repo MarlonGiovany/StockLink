@@ -222,26 +222,28 @@ minuto e o som nunca tocava.
     }
   }
 
-  /** Sirene de chamado parado há mais de 24h: sobe e desce, bem diferente do apito. */
+  /** Bip de chamado parado há mais de 24h: sequência suave de bips, ao longo de `segundos`. */
   function sirene(segundos) {
     if (!liberado()) return;
-    const t0 = audio.currentTime;
-    const osc   = audio.createOscillator();
-    const ganho = audio.createGain();
-    osc.type = 'sawtooth';
-    // Varre 480 Hz ↔ 1150 Hz em ciclos de 1,2s — o desenho de sirene.
-    const meio = 0.6;
-    for (let t = 0; t < segundos; t += meio * 2) {
-      osc.frequency.setValueAtTime(480, t0 + t);
-      osc.frequency.linearRampToValueAtTime(1150, t0 + t + meio);
-      osc.frequency.linearRampToValueAtTime(480, t0 + t + meio * 2);
+    // Onda senoidal (o timbre mais suave que existe), em bips curtos e
+    // espaçados — nada de sweep contínuo, que é o que soa como sirene.
+    const dur = 0.35, intervalo = 0.85;
+    const vezes = Math.max(1, Math.round(segundos / intervalo));
+    for (let i = 0; i < vezes; i++) {
+      const t = audio.currentTime + i * intervalo;
+      const osc   = audio.createOscillator();
+      const ganho = audio.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = 700;
+      // Entrada e saída graduais (bem mais que a sirene antiga) tiram
+      // qualquer aspereza do início/fim de cada bip.
+      ganho.gain.setValueAtTime(0.0001, t);
+      ganho.gain.exponentialRampToValueAtTime(0.45, t + 0.08);
+      ganho.gain.setValueAtTime(0.45, t + dur - 0.1);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+      osc.connect(ganho); ganho.connect(saida());
+      osc.start(t); osc.stop(t + dur + 0.02);
     }
-    ganho.gain.setValueAtTime(0.0001, t0);
-    ganho.gain.exponentialRampToValueAtTime(0.7, t0 + 0.06);
-    ganho.gain.setValueAtTime(0.7, t0 + segundos - 0.25);
-    ganho.gain.exponentialRampToValueAtTime(0.0001, t0 + segundos);
-    osc.connect(ganho); ganho.connect(saida());
-    osc.start(t0); osc.stop(t0 + segundos + 0.05);
   }
 
   function piscar(classe) {
@@ -259,7 +261,7 @@ minuto e o som nunca tocava.
     const agora = Date.now();
     if (agora - ultimaSirene < MINUTOS_ENTRE_SIRENES * 60 * 1000) return;
     ultimaSirene = agora;
-    sirene(3);
+    sirene(5);
     piscar('aviso-atraso');
   }
 
