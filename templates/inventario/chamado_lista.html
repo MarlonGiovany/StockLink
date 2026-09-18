@@ -135,7 +135,7 @@
           <td>{% if c.cliente %}{{ c.cliente }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
           <td>
             <a href="{% url 'equipamento_detalhe' c.equipamento.pk %}">
-              Pat. {{ c.equipamento.numero_patrimonio }}</a>
+              INF-{{ c.equipamento.numero_patrimonio }}</a>
             <div class="small text-muted">{{ c.equipamento.marca }} {{ c.equipamento.modelo }}</div>
           </td>
           <td>{{ c.descricao|truncatechars:70 }}</td>

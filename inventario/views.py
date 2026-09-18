@@ -751,7 +751,7 @@ def aditivo_novo(request, pk):
                 indisponiveis = [e for e in equipamentos if e.pk not in disponiveis_ids]
                 if indisponiveis:
                     nomes = ", ".join(
-                        f"Pat. {e.numero_patrimonio}" for e in indisponiveis
+                        f"INF-{e.numero_patrimonio}" for e in indisponiveis
                     )
                     form.add_error(
                         "equipamentos",
@@ -777,7 +777,7 @@ def aditivo_novo(request, pk):
                         except (InvalidOperation, ValueError):
                             erro_valor = (
                                 f"Informe um valor válido para a máquina "
-                                f"Pat. {equipamento.numero_patrimonio}."
+                                f"INF-{equipamento.numero_patrimonio}."
                             )
                             break
                         valores[equipamento.pk] = valor
@@ -797,7 +797,7 @@ def aditivo_novo(request, pk):
                             if equipamentos:
                                 if not aditivo.descricao:
                                     nomes = ", ".join(
-                                        f"Pat. {e.numero_patrimonio}" for e in equipamentos
+                                        f"INF-{e.numero_patrimonio}" for e in equipamentos
                                     )
                                     aditivo.descricao = (
                                         f"{len(equipamentos)} máquina(s) incluída(s): {nomes}"

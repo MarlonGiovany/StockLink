@@ -120,7 +120,7 @@
             {% endif %}
           </td>
           <td>{% if c.cliente %}{{ c.cliente|truncatechars:28 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-          <td class="text-nowrap">Pat. {{ c.equipamento.numero_patrimonio }}</td>
+          <td class="text-nowrap">INF-{{ c.equipamento.numero_patrimonio }}</td>
           <td>
             {% if c.encerrado %}
               {{ c.realizado|truncatechars:60 }}

@@ -334,13 +334,13 @@ class EquipamentoSelect(forms.Select):
 
 
 class EquipamentoChoiceField(forms.ModelChoiceField):
-    """Mostra a máquina do jeito que a recepção reconhece: patrimônio + modelo."""
+    """Mostra a máquina do jeito que a recepção reconhece: INF + modelo."""
 
     widget = EquipamentoSelect
 
     def label_from_instance(self, obj):
         produto = f"{obj.produto} — " if obj.produto else ""
-        return f"Pat. {obj.numero_patrimonio} — {produto}{obj.marca} {obj.modelo}"
+        return f"INF-{obj.numero_patrimonio} — {produto}{obj.marca} {obj.modelo}"
 
 
 def maquinas_com_cliente():
@@ -421,7 +421,7 @@ class ChamadoAberturaForm(BootstrapFormMixin, forms.ModelForm):
                 dono = locacao.cliente if locacao else None
                 self.add_error(
                     "equipamento",
-                    f"A máquina Pat. {equipamento.numero_patrimonio} não está "
+                    f"A máquina INF-{equipamento.numero_patrimonio} não está "
                     f"locada para {cliente}"
                     + (f" — ela está com {dono}." if dono else "."),
                 )
