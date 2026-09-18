@@ -6,15 +6,10 @@
   <div>
     <h4 class="mb-0">Usuários e permissões</h4>
     <span class="text-muted">Marque o que cada usuário pode acessar.</span>
-  </div>
-</div>
-
-<div class="alert alert-secondary d-flex align-items-start gap-2">
-  <span style="font-size:1.2rem;line-height:1;">👑</span>
-  <div>
-    <strong>{{ owner.get_username }}</strong> é o dono do sistema (primeiro usuário cadastrado).
-    Ele enxerga todas as áreas e é o único que abre esta tela — por isso não
-    aparece na lista abaixo.
+    <div class="small text-muted mt-1">
+      As permissões são definidas única e exclusivamente pelo administrador do sistema
+      (atualmente, {{ owner.get_full_name|default:owner.get_username }}).
+    </div>
   </div>
 </div>
 
