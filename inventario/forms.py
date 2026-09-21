@@ -1,3 +1,4 @@
+import re
 from decimal import Decimal
 
 from django import forms
@@ -14,6 +15,18 @@ from .models import (
     Manutencao,
     Produto,
 )
+
+
+def _apenas_digitos(valor):
+    return re.sub(r"\D", "", valor or "")
+
+
+def _formata_cpf(digitos):
+    return f"{digitos[0:3]}.{digitos[3:6]}.{digitos[6:9]}-{digitos[9:11]}"
+
+
+def _formata_cnpj(digitos):
+    return f"{digitos[0:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:14]}"
 
 
 class BootstrapFormMixin:
@@ -221,14 +234,52 @@ class FornecedorForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Fornecedor
         fields = ["nome", "cnpj", "telefone", "email", "observacoes"]
-        widgets = {"observacoes": forms.Textarea(attrs={"rows": 2})}
+        widgets = {
+            "cnpj": forms.TextInput(attrs={
+                "data-mascara": "cnpj",
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "placeholder": "00.000.000/0000-00",
+            }),
+            "observacoes": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def clean_cnpj(self):
+        valor = (self.cleaned_data.get("cnpj") or "").strip()
+        if not valor:
+            return valor
+        digitos = _apenas_digitos(valor)
+        if len(digitos) != 14:
+            raise forms.ValidationError("Digite um CNPJ com 14 números.")
+        return _formata_cnpj(digitos)
 
 
 class ClienteForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Cliente
         fields = ["nome", "documento", "telefone", "email", "endereco", "observacoes"]
-        widgets = {"observacoes": forms.Textarea(attrs={"rows": 2})}
+        widgets = {
+            "documento": forms.TextInput(attrs={
+                "data-mascara": "documento",
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "placeholder": "CPF ou CNPJ — só números",
+            }),
+            "observacoes": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def clean_documento(self):
+        valor = (self.cleaned_data.get("documento") or "").strip()
+        if not valor:
+            return valor
+        digitos = _apenas_digitos(valor)
+        if len(digitos) == 11:
+            return _formata_cpf(digitos)
+        if len(digitos) == 14:
+            return _formata_cnpj(digitos)
+        raise forms.ValidationError(
+            "Digite um CPF (11 números) ou um CNPJ (14 números)."
+        )
 
 
 class ContratoForm(BootstrapFormMixin, forms.ModelForm):
