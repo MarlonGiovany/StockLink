@@ -31,9 +31,22 @@
         return digitos.length > 11 ? formataCnpj(digitos) : formataCpf(digitos);
     }
 
+    // Telefone: fixo (00) 0000-0000 (8 dígitos) ou celular (00) 00000-0000
+    // (9 dígitos) — o 9º dígito é o que faz o hífen deslocar pra 5+4.
+    function formataTelefone(digitos) {
+        digitos = digitos.slice(0, 11);
+        if (digitos.length <= 2) return digitos;
+        var ddd = digitos.slice(0, 2);
+        var resto = digitos.slice(2);
+        if (digitos.length > 10) return "(" + ddd + ") " + resto.slice(0, 5) + "-" + resto.slice(5);
+        if (resto.length > 4) return "(" + ddd + ") " + resto.slice(0, 4) + "-" + resto.slice(4);
+        return "(" + ddd + ") " + resto;
+    }
+
     var FORMATADORES = {
         cnpj: { formata: formataCnpj, maxDigitos: 14 },
         documento: { formata: formataDocumento, maxDigitos: 14 },
+        telefone: { formata: formataTelefone, maxDigitos: 11 },
     };
 
     function aplicaMascara(campo) {
