@@ -29,6 +29,12 @@ def _formata_cnpj(digitos):
     return f"{digitos[0:2]}.{digitos[2:5]}.{digitos[5:8]}/{digitos[8:12]}-{digitos[12:14]}"
 
 
+def _formata_telefone(digitos):
+    if len(digitos) == 11:
+        return f"({digitos[0:2]}) {digitos[2:7]}-{digitos[7:11]}"
+    return f"({digitos[0:2]}) {digitos[2:6]}-{digitos[6:10]}"
+
+
 class BootstrapFormMixin:
     """Aplica classes do Bootstrap automaticamente a todos os campos."""
 
@@ -241,6 +247,12 @@ class FornecedorForm(BootstrapFormMixin, forms.ModelForm):
                 "autocomplete": "off",
                 "placeholder": "00.000.000/0000-00",
             }),
+            "telefone": forms.TextInput(attrs={
+                "data-mascara": "telefone",
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "placeholder": "(00) 00000-0000",
+            }),
             "observacoes": forms.Textarea(attrs={"rows": 2}),
         }
 
@@ -253,6 +265,17 @@ class FornecedorForm(BootstrapFormMixin, forms.ModelForm):
             raise forms.ValidationError("Digite um CNPJ com 14 números.")
         return _formata_cnpj(digitos)
 
+    def clean_telefone(self):
+        valor = (self.cleaned_data.get("telefone") or "").strip()
+        if not valor:
+            return valor
+        digitos = _apenas_digitos(valor)
+        if len(digitos) not in (10, 11):
+            raise forms.ValidationError(
+                "Digite um telefone com DDD (10 ou 11 números)."
+            )
+        return _formata_telefone(digitos)
+
 
 class ClienteForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
@@ -264,6 +287,12 @@ class ClienteForm(BootstrapFormMixin, forms.ModelForm):
                 "inputmode": "numeric",
                 "autocomplete": "off",
                 "placeholder": "CPF ou CNPJ — só números",
+            }),
+            "telefone": forms.TextInput(attrs={
+                "data-mascara": "telefone",
+                "inputmode": "numeric",
+                "autocomplete": "off",
+                "placeholder": "(00) 00000-0000",
             }),
             "observacoes": forms.Textarea(attrs={"rows": 2}),
         }
@@ -280,6 +309,17 @@ class ClienteForm(BootstrapFormMixin, forms.ModelForm):
         raise forms.ValidationError(
             "Digite um CPF (11 números) ou um CNPJ (14 números)."
         )
+
+    def clean_telefone(self):
+        valor = (self.cleaned_data.get("telefone") or "").strip()
+        if not valor:
+            return valor
+        digitos = _apenas_digitos(valor)
+        if len(digitos) not in (10, 11):
+            raise forms.ValidationError(
+                "Digite um telefone com DDD (10 ou 11 números)."
+            )
+        return _formata_telefone(digitos)
 
 
 class ContratoForm(BootstrapFormMixin, forms.ModelForm):
