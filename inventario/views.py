@@ -8,7 +8,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied
-from django.db import transaction
+from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.http import FileResponse, Http404, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
@@ -810,59 +810,82 @@ def aditivo_novo(request, pk):
                     if erro_valor:
                         form.add_error("equipamentos", erro_valor)
                     else:
-                        with transaction.atomic():
-                            aditivo = form.save(commit=False)
-                            proximo = (
-                                contrato.aditivos.aggregate(m=Max("numero"))["m"] or 0
-                            ) + 1
-                            aditivo.contrato = contrato
-                            aditivo.numero = proximo
-                            aditivo.criado_por = request.user
-
-                            if equipamentos:
-                                if not aditivo.descricao:
-                                    nomes = ", ".join(
-                                        f"INF-{e.numero_patrimonio}" for e in equipamentos
-                                    )
-                                    aditivo.descricao = (
-                                        f"{len(equipamentos)} máquina(s) incluída(s): {nomes}"
-                                    )
-                                # Soma o valor real de cada máquina — elas podem
-                                # ter preços diferentes entre si.
-                                aditivo.valor = sum(valores.values())
-
-                            aditivo.save()
-
-                            for equipamento in equipamentos:
-                                valor = valores[equipamento.pk]
-                                Locacao.objects.create(
-                                    equipamento=equipamento,
-                                    cliente=contrato.cliente,
-                                    contrato=contrato,
-                                    aditivo=aditivo,
-                                    valor=valor,
-                                    data_inicio=aditivo.data,
-                                    ativa=True,
-                                )
-                                equipamento.status = Equipamento.Status.LOCADO
-                                equipamento.save(update_fields=["status"])
-                                registrar_movimentacao(
-                                    equipamento, Movimentacao.Tipo.LOCACAO,
-                                    f"Locado para {contrato.cliente} por "
-                                    f"R$ {_reais(valor)} via Aditivo {proximo} "
-                                    f"do contrato Nº {contrato.numero}.",
-                                    request.user,
-                                )
-
+                        aditivo = form.save(commit=False)
+                        aditivo.contrato = contrato
+                        aditivo.criado_por = request.user
                         if equipamentos:
+                            if not aditivo.descricao:
+                                nomes = ", ".join(
+                                    f"INF-{e.numero_patrimonio}" for e in equipamentos
+                                )
+                                aditivo.descricao = (
+                                    f"{len(equipamentos)} máquina(s) incluída(s): {nomes}"
+                                )
+                            # Soma o valor real de cada máquina — elas podem
+                            # ter preços diferentes entre si.
+                            aditivo.valor = sum(valores.values())
+
+                        # O número do aditivo é o próximo livre do contrato. Duas
+                        # pessoas salvando ao mesmo tempo podem calcular o mesmo
+                        # "próximo" antes de qualquer uma gravar — a constraint
+                        # única barra a segunda, e ela tenta de novo com um
+                        # número recalculado em vez de estourar erro 500.
+                        proximo = None
+                        salvo = False
+                        for _tentativa in range(3):
+                            try:
+                                with transaction.atomic():
+                                    proximo = (
+                                        contrato.aditivos.aggregate(
+                                            m=Max("numero")
+                                        )["m"] or 0
+                                    ) + 1
+                                    aditivo.numero = proximo
+                                    aditivo.save()
+
+                                    for equipamento in equipamentos:
+                                        valor = valores[equipamento.pk]
+                                        Locacao.objects.create(
+                                            equipamento=equipamento,
+                                            cliente=contrato.cliente,
+                                            contrato=contrato,
+                                            aditivo=aditivo,
+                                            valor=valor,
+                                            data_inicio=aditivo.data,
+                                            ativa=True,
+                                        )
+                                        equipamento.status = Equipamento.Status.LOCADO
+                                        equipamento.save(update_fields=["status"])
+                                        registrar_movimentacao(
+                                            equipamento, Movimentacao.Tipo.LOCACAO,
+                                            f"Locado para {contrato.cliente} por "
+                                            f"R$ {_reais(valor)} via Aditivo "
+                                            f"{proximo} do contrato "
+                                            f"Nº {contrato.numero}.",
+                                            request.user,
+                                        )
+                                salvo = True
+                                break
+                            except IntegrityError:
+                                continue
+
+                        if not salvo:
+                            form.add_error(
+                                None,
+                                "Não foi possível registrar o aditivo agora "
+                                "— outra pessoa salvou um aditivo neste "
+                                "contrato ao mesmo tempo. Tente novamente.",
+                            )
+                        elif equipamentos:
                             messages.success(
                                 request,
                                 f"Aditivo {proximo} registrado com "
                                 f"{len(equipamentos)} máquina(s) incluída(s).",
                             )
+                            return redirect("contrato_detalhe", pk=contrato.pk)
                         else:
                             messages.success(request, f"Aditivo {proximo} registrado.")
-                        return redirect("contrato_detalhe", pk=contrato.pk)
+                            return redirect("contrato_detalhe", pk=contrato.pk)
     else:
         form = AditivoForm()
     return render(
