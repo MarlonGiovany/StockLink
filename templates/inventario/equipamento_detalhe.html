@@ -22,7 +22,7 @@
     {% if perms.inventario.change_equipamento %}
       <a href="{% url 'equipamento_editar' equipamento.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
     {% endif %}
-    {% if perms.inventario.delete_equipamento %}
+    {% if perms.inventario.delete_equipamento and not locacao_ativa %}
       <a href="{% url 'equipamento_excluir' equipamento.pk %}" class="btn btn-sm btn-outline-danger">Excluir</a>
     {% endif %}
   </div>

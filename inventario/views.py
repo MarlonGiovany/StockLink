@@ -283,13 +283,26 @@ def equipamento_editar(request, pk):
 @permission_required("inventario.delete_equipamento", raise_exception=True)
 def equipamento_excluir(request, pk):
     equipamento = get_object_or_404(Equipamento, pk=pk)
+    locacao_ativa = equipamento.locacao_ativa
     if request.method == "POST":
+        if locacao_ativa:
+            # Revalida no servidor: o botão de excluir não é escondido quando
+            # o equipamento está locado, então um POST ainda conseguiria
+            # remover uma máquina que está com um cliente no momento.
+            messages.error(
+                request,
+                f"Este equipamento está locado para {locacao_ativa.cliente} e "
+                f"não pode ser excluído. Encerre a locação antes de remover "
+                f"o equipamento.",
+            )
+            return redirect("equipamento_detalhe", pk=equipamento.pk)
         nome = str(equipamento)
         equipamento.delete()
         messages.success(request, f"Equipamento '{nome}' removido.")
         return redirect("equipamento_lista")
     return render(
-        request, "inventario/equipamento_excluir.html", {"equipamento": equipamento}
+        request, "inventario/equipamento_excluir.html",
+        {"equipamento": equipamento, "locacao_ativa": locacao_ativa},
     )
 
 
@@ -326,24 +339,36 @@ def locacao_nova(request, pk):
     if request.method == "POST":
         form = LocacaoForm(request.POST)
         if form.is_valid():
-            locacao = form.save(commit=False)
-            locacao.equipamento = equipamento
-            locacao.save()
-            if locacao.ativa:
-                equipamento.status = Equipamento.Status.LOCADO
-                equipamento.save(update_fields=["status"])
-            vinculo = (
-                f" Vinculado ao contrato Nº {locacao.contrato.numero}."
-                if locacao.contrato else ""
-            )
-            registrar_movimentacao(
-                equipamento, Movimentacao.Tipo.LOCACAO,
-                f"Locado para {locacao.cliente} por R$ {locacao.valor} "
-                f"(início {locacao.data_inicio:%d/%m/%Y}).{vinculo}",
-                request.user,
-            )
-            messages.success(request, "Locação registrada.")
-            return redirect("equipamento_detalhe", pk=equipamento.pk)
+            locacao_ativa = equipamento.locacao_ativa
+            if form.cleaned_data["ativa"] and locacao_ativa:
+                # Revalida no servidor: a tela esconde o botão quando já há uma
+                # locação ativa, mas um POST direto ainda conseguiria criar uma
+                # segunda para o mesmo equipamento.
+                messages.error(
+                    request,
+                    f"Este equipamento já está locado para "
+                    f"{locacao_ativa.cliente}. Encerre a locação atual antes "
+                    f"de registrar uma nova.",
+                )
+            else:
+                locacao = form.save(commit=False)
+                locacao.equipamento = equipamento
+                locacao.save()
+                if locacao.ativa:
+                    equipamento.status = Equipamento.Status.LOCADO
+                    equipamento.save(update_fields=["status"])
+                vinculo = (
+                    f" Vinculado ao contrato Nº {locacao.contrato.numero}."
+                    if locacao.contrato else ""
+                )
+                registrar_movimentacao(
+                    equipamento, Movimentacao.Tipo.LOCACAO,
+                    f"Locado para {locacao.cliente} por R$ {locacao.valor} "
+                    f"(início {locacao.data_inicio:%d/%m/%Y}).{vinculo}",
+                    request.user,
+                )
+                messages.success(request, "Locação registrada.")
+                return redirect("equipamento_detalhe", pk=equipamento.pk)
     else:
         form = LocacaoForm()
     return render(

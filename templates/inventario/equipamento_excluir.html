@@ -5,13 +5,19 @@
   <div class="col-lg-6">
     <div class="card shadow-sm border-danger"><div class="card-body">
       <h5 class="text-danger">Excluir equipamento</h5>
-      <p>Tem certeza que deseja remover <strong>{{ equipamento }}</strong>?
-         Esta ação não pode ser desfeita e apagará também seu histórico.</p>
-      <form method="post">
-        {% csrf_token %}
-        <button class="btn btn-danger">Sim, excluir</button>
-        <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="btn btn-outline-secondary">Cancelar</a>
-      </form>
+      {% if locacao_ativa %}
+        <p>Este equipamento está locado para <strong>{{ locacao_ativa.cliente }}</strong>
+           e não pode ser excluído. Encerre a locação antes de remover o equipamento.</p>
+        <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="btn btn-outline-secondary">Voltar</a>
+      {% else %}
+        <p>Tem certeza que deseja remover <strong>{{ equipamento }}</strong>?
+           Esta ação não pode ser desfeita e apagará também seu histórico.</p>
+        <form method="post">
+          {% csrf_token %}
+          <button class="btn btn-danger">Sim, excluir</button>
+          <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+        </form>
+      {% endif %}
     </div></div>
   </div>
 </div>
