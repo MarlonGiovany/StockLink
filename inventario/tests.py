@@ -482,6 +482,106 @@ class ContratoCompartilhadoTests(BaseLogada):
         self.assertEqual(locacao.contrato, self.contrato_rodo)
 
 
+class LocacaoDuplicadaTests(BaseLogada):
+    """Não pode existir uma 2ª locação ativa para o mesmo equipamento.
+
+    A tela esconde o botão "Registrar locação" quando já existe uma ativa,
+    mas isso não impede um POST direto para a URL — a trava de verdade tem
+    que estar no servidor.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.cliente1 = Cliente.objects.create(nome="RODOSERGIPE")
+        self.cliente2 = Cliente.objects.create(nome="HOSPITAL RENASCENCA")
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1002")
+        self.locacao_atual = Locacao.objects.create(
+            equipamento=self.maquina, cliente=self.cliente1,
+            valor="200.00", data_inicio="2026-08-01", ativa=True,
+        )
+
+    def dados_locacao(self, **extra):
+        dados = {
+            "cliente": self.cliente2.pk, "contrato": "", "valor": "300.00",
+            "data_inicio": "2026-09-01", "data_fim": "",
+            "ativa": "on", "observacoes": "",
+        }
+        dados.update(extra)
+        return dados
+
+    def test_recusa_segunda_locacao_ativa_via_post_direto(self):
+        resposta = self.client.post(
+            reverse("locacao_nova", args=[self.maquina.pk]), self.dados_locacao()
+        )
+        self.assertEqual(resposta.status_code, 200)  # não redireciona: erro
+        self.assertContains(resposta, "já está locado para")
+        self.assertEqual(
+            Locacao.objects.filter(equipamento=self.maquina, ativa=True).count(), 1
+        )
+        self.assertEqual(
+            Locacao.objects.filter(equipamento=self.maquina).count(), 1
+        )
+
+    def test_permite_registrar_locacao_encerrada_como_historico(self):
+        """Marcar a nova locação como não-ativa não conflita com a atual."""
+        resposta = self.client.post(
+            reverse("locacao_nova", args=[self.maquina.pk]),
+            self.dados_locacao(ativa=""),
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(Locacao.objects.filter(equipamento=self.maquina).count(), 2)
+
+    def test_libera_nova_locacao_apos_encerrar_a_atual(self):
+        self.client.post(reverse("locacao_encerrar", args=[self.locacao_atual.pk]))
+        resposta = self.client.post(
+            reverse("locacao_nova", args=[self.maquina.pk]), self.dados_locacao()
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(
+            Locacao.objects.filter(equipamento=self.maquina, ativa=True).count(), 1
+        )
+
+
+class ExclusaoDeEquipamentoTests(BaseLogada):
+    """Equipamento locado não pode ser excluído.
+
+    Igual à locação duplicada: o botão "Excluir" some da tela quando o
+    equipamento está locado, mas a trava real precisa estar no servidor.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="RODOSERGIPE")
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1002")
+        self.locacao = Locacao.objects.create(
+            equipamento=self.maquina, cliente=self.cliente,
+            valor="200.00", data_inicio="2026-08-01", ativa=True,
+        )
+
+    def test_recusa_excluir_equipamento_locado_via_post_direto(self):
+        resposta = self.client.post(
+            reverse("equipamento_excluir", args=[self.maquina.pk])
+        )
+        self.assertRedirects(
+            resposta, reverse("equipamento_detalhe", args=[self.maquina.pk])
+        )
+        self.assertTrue(Equipamento.objects.filter(pk=self.maquina.pk).exists())
+
+    def test_tela_de_confirmacao_nao_mostra_botao_de_excluir_se_locado(self):
+        resposta = self.client.get(
+            reverse("equipamento_excluir", args=[self.maquina.pk])
+        )
+        self.assertNotContains(resposta, "Sim, excluir")
+
+    def test_exclui_normalmente_depois_de_encerrar_a_locacao(self):
+        self.client.post(reverse("locacao_encerrar", args=[self.locacao.pk]))
+        resposta = self.client.post(
+            reverse("equipamento_excluir", args=[self.maquina.pk])
+        )
+        self.assertRedirects(resposta, reverse("equipamento_lista"))
+        self.assertFalse(Equipamento.objects.filter(pk=self.maquina.pk).exists())
+
+
 class BuscaDeClienteTests(BaseLogada):
     """O filtro de busca da aba Clientes."""
 
