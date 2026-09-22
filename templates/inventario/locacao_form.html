@@ -9,6 +9,9 @@
       <div class="alert alert-warning">Nenhum cliente cadastrado.
         <a href="{% url 'cliente_novo' %}">Cadastre um cliente</a> primeiro.</div>
     {% endif %}
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
     <div class="card shadow-sm"><div class="card-body">
       <form method="post" novalidate>
         {% csrf_token %}

@@ -5,6 +5,9 @@
   <div class="col-lg-7">
     <a href="{% url 'equipamento_detalhe' equipamento.pk %}" class="text-muted text-decoration-none">&larr; {{ equipamento }}</a>
     <h4 class="mt-1 mb-3">Registrar manutenção</h4>
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
     <div class="card shadow-sm"><div class="card-body">
       <form method="post" novalidate>
         {% csrf_token %}

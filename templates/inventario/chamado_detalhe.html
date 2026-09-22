@@ -136,6 +136,9 @@
           </p>
 
           {% if pode_encerrar %}
+            {% if form.non_field_errors %}
+              <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+            {% endif %}
             <form method="post" enctype="multipart/form-data" novalidate>
               {% csrf_token %}
 
