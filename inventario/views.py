@@ -602,7 +602,11 @@ def locacao_valor_em_lote(request, pk):
         )
         return destino
     if not form.is_valid():
-        messages.error(request, form.errors["valor"][0])
+        # Não assume qual campo falhou — hoje só existe "valor", mas erros de
+        # validação futuros (ou um clean() sem campo associado) não podem
+        # estourar KeyError aqui.
+        primeiro_erro = next(iter(form.errors.values()), ["Valor inválido."])[0]
+        messages.error(request, primeiro_erro)
         return destino
 
     valor = form.cleaned_data["valor"]
