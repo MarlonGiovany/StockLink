@@ -1,8 +1,13 @@
 from datetime import timedelta
 
 from django.conf import settings
+from django.core.validators import MinValueValidator
 from django.db import models
 from django.utils import timezone
+
+# Zero é um valor válido (equipamento cedido sem cobrança) — só negativo é
+# rejeitado. Usado nos campos de valor monetário do sistema.
+validar_nao_negativo = MinValueValidator(0, message="Não pode ser negativo.")
 
 
 class Fornecedor(models.Model):
@@ -103,7 +108,7 @@ class Equipamento(models.Model):
     # Controle patrimonial / compra
     valor_compra = models.DecimalField(
         "Valor pago na compra", max_digits=12, decimal_places=2,
-        null=True, blank=True,
+        null=True, blank=True, validators=[validar_nao_negativo],
     )
     data_aquisicao = models.DateField("Data de aquisição", null=True, blank=True)
     fornecedor = models.ForeignKey(
@@ -162,7 +167,8 @@ class Manutencao(models.Model):
     data = models.DateField("Data", default=timezone.now)
     descricao = models.TextField("Descrição do serviço")
     custo = models.DecimalField(
-        "Custo", max_digits=12, decimal_places=2, null=True, blank=True
+        "Custo", max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[validar_nao_negativo],
     )
     tecnico = models.CharField("Técnico responsável", max_length=120, blank=True)
     registrado_por = models.ForeignKey(
@@ -200,7 +206,10 @@ class Locacao(models.Model):
         related_name="locacoes", verbose_name="Aditivo",
         help_text="Aditivo que incluiu esta máquina no contrato, quando veio por um.",
     )
-    valor = models.DecimalField("Valor da locação", max_digits=12, decimal_places=2)
+    valor = models.DecimalField(
+        "Valor da locação", max_digits=12, decimal_places=2,
+        validators=[validar_nao_negativo],
+    )
     data_inicio = models.DateField("Início do contrato")
     data_fim = models.DateField("Término do contrato", null=True, blank=True)
     ativa = models.BooleanField("Locação ativa", default=True)
@@ -238,7 +247,8 @@ class Contrato(models.Model):
     )
     data_contrato = models.DateField("Data do contrato", default=timezone.now)
     valor = models.DecimalField(
-        "Valor", max_digits=12, decimal_places=2, null=True, blank=True
+        "Valor", max_digits=12, decimal_places=2, null=True, blank=True,
+        validators=[validar_nao_negativo],
     )
     arquivo = models.FileField("Arquivo (PDF)", upload_to="contratos/%Y/", blank=True)
     observacoes = models.TextField("Observações", blank=True)
@@ -342,7 +352,7 @@ class Aditivo(models.Model):
     )
     valor = models.DecimalField(
         "Valor do equipamento", max_digits=12, decimal_places=2,
-        null=True, blank=True,
+        null=True, blank=True, validators=[validar_nao_negativo],
         help_text="Preço do equipamento desta alteração. Apenas registro — não muda o valor do contrato.",
     )
     data = models.DateField("Data do aditivo", default=timezone.now)

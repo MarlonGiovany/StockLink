@@ -797,12 +797,12 @@ def aditivo_novo(request, pk):
                         ).strip().replace(",", ".")
                         try:
                             valor = Decimal(bruto)
-                            if valor <= 0:
+                            if valor < 0:
                                 raise InvalidOperation
                         except (InvalidOperation, ValueError):
                             erro_valor = (
-                                f"Informe um valor válido para a máquina "
-                                f"INF-{equipamento.numero_patrimonio}."
+                                f"Informe um valor válido (0 ou maior) para "
+                                f"a máquina INF-{equipamento.numero_patrimonio}."
                             )
                             break
                         valores[equipamento.pk] = valor

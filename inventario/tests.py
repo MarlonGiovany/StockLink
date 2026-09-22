@@ -8,8 +8,10 @@ import importlib
 import json
 import tempfile
 from datetime import timedelta
+from decimal import Decimal
 
 from django.contrib.auth import get_user_model
+from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db.models import ProtectedError
 from django.test import TestCase, override_settings
@@ -17,7 +19,8 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .models import (
-    Chamado, Cliente, Contrato, Equipamento, Locacao, Movimentacao, Produto,
+    Aditivo, Chamado, Cliente, Contrato, Equipamento, Locacao, Manutencao,
+    Movimentacao, Produto,
 )
 
 # A função de classificação mora na migração 0009 (nome começa com dígito,
@@ -1002,6 +1005,102 @@ class AnexoDaOrdemDeServicoTests(BaseComChamado):
         self.assertEqual(resposta.status_code, 302)
 
 
+class ValorNaoNegativoTests(TestCase):
+    """Zero é um valor válido (equipamento cedido sem cobrança) — só
+    negativo é barrado, nos 5 campos de valor monetário do sistema."""
+
+    def test_valor_compra_do_equipamento(self):
+        equipamento = Equipamento(
+            marca="DELL", modelo="OPTIPLEX", numero_patrimonio="5001",
+            valor_compra=Decimal("-1"),
+        )
+        with self.assertRaises(ValidationError):
+            equipamento.full_clean()
+        equipamento.valor_compra = Decimal("0")
+        equipamento.full_clean()
+
+    def test_custo_da_manutencao(self):
+        equipamento = Equipamento.objects.create(
+            marca="DELL", modelo="OPTIPLEX", numero_patrimonio="5002",
+        )
+        manutencao = Manutencao(
+            equipamento=equipamento, descricao="Troca de peça",
+            custo=Decimal("-1"),
+        )
+        with self.assertRaises(ValidationError):
+            manutencao.full_clean()
+        manutencao.custo = Decimal("0")
+        manutencao.full_clean()
+
+    def test_valor_da_locacao(self):
+        equipamento = Equipamento.objects.create(
+            marca="DELL", modelo="OPTIPLEX", numero_patrimonio="5003",
+        )
+        cliente = Cliente.objects.create(nome="CLIENTE X")
+        locacao = Locacao(
+            equipamento=equipamento, cliente=cliente, valor=Decimal("-1"),
+            data_inicio="2026-08-01",
+        )
+        with self.assertRaises(ValidationError):
+            locacao.full_clean()
+        locacao.valor = Decimal("0")
+        locacao.full_clean()
+
+    def test_valor_do_contrato(self):
+        contrato = Contrato(numero="1", valor=Decimal("-1"))
+        with self.assertRaises(ValidationError):
+            contrato.full_clean()
+        contrato.valor = Decimal("0")
+        contrato.full_clean()
+
+    def test_valor_do_aditivo(self):
+        contrato = Contrato.objects.create(numero="1")
+        aditivo = Aditivo(
+            contrato=contrato, numero=1, descricao="x", valor=Decimal("-1"),
+        )
+        with self.assertRaises(ValidationError):
+            aditivo.full_clean()
+        aditivo.valor = Decimal("0")
+        aditivo.full_clean()
+
+
+class ValorDoAditivoPorMaquinaTests(BaseLogada):
+    """O valor de cada máquina marcada no aditivo vem de um campo próprio
+    (lido direto do POST, fora do ModelForm) — zero é aceito (equipamento
+    cedido sem cobrança), só negativo é recusado."""
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="RODOSERGIPE")
+        self.contrato = Contrato.objects.create(
+            numero="10", cliente=self.cliente, data_contrato="2026-08-01"
+        )
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1001")
+
+    def enviar(self, valor):
+        return self.client.post(
+            reverse("aditivo_novo", args=[self.contrato.pk]),
+            {
+                "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "",
+                "data": "2026-09-01", "observacoes": "",
+                "equipamentos": [self.maquina.pk],
+                f"valor_equip_{self.maquina.pk}": valor,
+            },
+        )
+
+    def test_aceita_maquina_marcada_com_valor_zero(self):
+        resposta = self.enviar("0")
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(
+            Locacao.objects.get(equipamento=self.maquina).valor, Decimal("0")
+        )
+
+    def test_recusa_valor_negativo(self):
+        resposta = self.enviar("-50")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertFalse(Locacao.objects.filter(equipamento=self.maquina).exists())
+
+
 class ValorDeLocacaoEmLoteTests(BaseLogada):
     """Aplicar um mesmo valor a várias máquinas do contrato de uma vez."""
 
@@ -1062,8 +1161,15 @@ class ValorDeLocacaoEmLoteTests(BaseLogada):
         self.l1.refresh_from_db()
         self.assertEqual(str(self.l1.valor), "100.00")
 
-    def test_valor_zero_e_recusado(self):
-        self.aplica([self.l1.pk], valor="0")
+    def test_valor_zero_e_aceito(self):
+        """Máquina cedida sem cobrança — zero é um valor válido, só negativo não é."""
+        resposta = self.aplica([self.l1.pk], valor="0")
+        self.assertEqual(resposta.status_code, 302)
+        self.l1.refresh_from_db()
+        self.assertEqual(str(self.l1.valor), "0.00")
+
+    def test_valor_negativo_e_recusado(self):
+        self.aplica([self.l1.pk], valor="-10")
         self.l1.refresh_from_db()
         self.assertEqual(str(self.l1.valor), "100.00")
 
