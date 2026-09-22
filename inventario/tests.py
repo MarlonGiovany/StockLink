@@ -19,6 +19,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from .forms import ValorEmLoteForm
 from .models import (
     Aditivo, Chamado, Cliente, Contrato, Equipamento, Locacao, Manutencao,
     Movimentacao, Produto,
@@ -1197,6 +1198,19 @@ class ValorDeLocacaoEmLoteTests(BaseLogada):
                     args=[(contrato or self.contrato).pk]),
             {"valor": valor, "locacoes": ids},
         )
+
+    def test_erro_de_validacao_fora_do_campo_valor_nao_quebra(self):
+        """Regressão: `form.errors["valor"][0]` estourava KeyError se o erro
+        de validação não viesse do campo "valor" (ex.: um clean() futuro que
+        recusa sem apontar campo nenhum)."""
+        def clean_com_erro_geral(self_form):
+            raise ValidationError("Algo deu errado na validação.")
+
+        with mock.patch.object(ValorEmLoteForm, "clean", clean_com_erro_geral):
+            resposta = self.aplica([self.l1.pk])
+        self.assertEqual(resposta.status_code, 302)  # redireciona, não quebra
+        self.l1.refresh_from_db()
+        self.assertEqual(str(self.l1.valor), "100.00")  # nada foi alterado
 
     def test_aplica_o_mesmo_valor_nas_marcadas(self):
         resposta = self.aplica([self.l1.pk, self.l2.pk])
