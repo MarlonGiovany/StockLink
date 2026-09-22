@@ -223,15 +223,15 @@ class ValorEmLoteForm(forms.Form):
 
     valor = forms.DecimalField(
         label="Aplicar este valor", max_digits=12, decimal_places=2,
-        min_value=Decimal("0.01"),
+        min_value=Decimal("0"),
         widget=forms.NumberInput(attrs={
-            "class": "form-control", "step": "0.01", "min": "0.01",
+            "class": "form-control", "step": "0.01", "min": "0",
             "placeholder": "Ex.: 250,00",
         }),
         error_messages={
             "required": "Digite o valor da locação.",
             "invalid": "Valor inválido — use números, ex.: 250.00",
-            "min_value": "O valor da locação precisa ser maior que zero.",
+            "min_value": "O valor da locação não pode ser negativo.",
         },
     )
 
