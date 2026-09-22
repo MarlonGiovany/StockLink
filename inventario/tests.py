@@ -19,7 +19,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from .forms import ValorEmLoteForm
+from .forms import EquipamentoForm, ValorEmLoteForm
 from .models import (
     Aditivo, Chamado, Cliente, Contrato, Equipamento, Locacao, Manutencao,
     Movimentacao, Produto,
@@ -180,6 +180,24 @@ class CadastroComProdutoTests(BaseLogada):
         self.assertEqual(resposta.status_code, 200)
         self.assertIn("produto", resposta.context["form"].errors)
         self.assertFalse(Equipamento.objects.filter(numero_patrimonio="9001").exists())
+
+    def test_erro_sem_campo_associado_aparece_na_tela(self):
+        """Regressão: um clean() que recusa sem apontar campo (form.add_error
+        com None) ficava invisível — o template não renderizava
+        non_field_errors. Simula esse caso com um clean() que sempre recusa."""
+        def clean_recusa_geral(self_form):
+            self_form.add_error(None, "Motivo qualquer sem campo associado.")
+            return self_form.cleaned_data
+
+        with mock.patch.object(EquipamentoForm, "clean", clean_recusa_geral):
+            resposta = self.client.post(
+                reverse("equipamento_novo"), self.dados_base()
+            )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Motivo qualquer sem campo associado.")
+        self.assertFalse(
+            Equipamento.objects.filter(numero_patrimonio="9001").exists()
+        )
 
     def test_desktop_salva_a_ficha_tecnica(self):
         resposta = self.client.post(
