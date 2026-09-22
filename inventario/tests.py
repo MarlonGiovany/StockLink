@@ -9,11 +9,12 @@ import json
 import tempfile
 from datetime import timedelta
 from decimal import Decimal
+from unittest import mock
 
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.db.models import ProtectedError
+from django.db.models import ProtectedError, QuerySet
 from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
@@ -483,6 +484,72 @@ class ContratoCompartilhadoTests(BaseLogada):
         locacao.refresh_from_db()
         self.assertFalse(locacao.ativa)
         self.assertEqual(locacao.contrato, self.contrato_rodo)
+
+
+class NumeroDoAditivoConcorrenteTests(BaseLogada):
+    """Duas pessoas salvando aditivo no mesmo contrato ao mesmo tempo.
+
+    Se a leitura do "próximo número" já estiver desatualizada quando a
+    segunda tentativa for gravada, a constraint única (contrato, numero)
+    rejeita — a view precisa recalcular e tentar de novo, não estourar 500.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="RODOSERGIPE")
+        self.contrato = Contrato.objects.create(
+            numero="10", cliente=self.cliente, data_contrato="2026-08-01"
+        )
+        # Simula que outra pessoa acabou de gravar o aditivo 1 bem no
+        # instante em que esta requisição ainda vai ler o "próximo".
+        Aditivo.objects.create(contrato=self.contrato, numero=1, descricao="x")
+
+    def test_recalcula_numero_apos_colisao_em_vez_de_quebrar(self):
+        chamadas = {"n": 0}
+        original_aggregate = QuerySet.aggregate
+
+        def aggregate_com_leitura_desatualizada(self_qs, *args, **kwargs):
+            chamadas["n"] += 1
+            if chamadas["n"] == 1:
+                return {"m": 0}  # já não vale mais: o aditivo 1 já existe
+            return original_aggregate(self_qs, *args, **kwargs)
+
+        with mock.patch.object(
+            QuerySet, "aggregate", aggregate_com_leitura_desatualizada
+        ):
+            resposta = self.client.post(
+                reverse("aditivo_novo", args=[self.contrato.pk]),
+                {
+                    "tipo": Aditivo.Tipo.ADICAO, "descricao": "Nova cláusula",
+                    "valor": "", "data": "2026-09-01", "observacoes": "",
+                    "equipamentos": [],
+                },
+            )
+        self.assertEqual(resposta.status_code, 302)
+        numeros = set(
+            Aditivo.objects.filter(contrato=self.contrato)
+            .values_list("numero", flat=True)
+        )
+        self.assertEqual(numeros, {1, 2})
+
+    def test_desiste_com_mensagem_amigavel_se_colidir_sempre(self):
+        def aggregate_sempre_desatualizado(self_qs, *args, **kwargs):
+            return {"m": 0}
+
+        with mock.patch.object(
+            QuerySet, "aggregate", aggregate_sempre_desatualizado
+        ):
+            resposta = self.client.post(
+                reverse("aditivo_novo", args=[self.contrato.pk]),
+                {
+                    "tipo": Aditivo.Tipo.ADICAO, "descricao": "Nova cláusula",
+                    "valor": "", "data": "2026-09-01", "observacoes": "",
+                    "equipamentos": [],
+                },
+            )
+        self.assertEqual(resposta.status_code, 200)  # não é 500
+        self.assertContains(resposta, "Tente novamente")
+        self.assertEqual(Aditivo.objects.filter(contrato=self.contrato).count(), 1)
 
 
 class LocacaoDuplicadaTests(BaseLogada):
