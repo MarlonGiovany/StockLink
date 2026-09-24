@@ -5,7 +5,9 @@ Para rodar:  python manage.py test inventario
 """
 
 import importlib
+import io
 import json
+import os
 import tempfile
 from datetime import timedelta
 from decimal import Decimal
@@ -14,6 +16,7 @@ from unittest import mock
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.core.management import call_command
 from django.db.models import ProtectedError, QuerySet
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -1308,3 +1311,89 @@ class ValorDeLocacaoEmLoteTests(BaseLogada):
         self.assertEqual(resposta.status_code, 403)
         self.l1.refresh_from_db()
         self.assertEqual(str(self.l1.valor), "100.00")
+
+
+class ImportarClientesTests(TestCase):
+    """Comando importar_clientes: cadastra só os novos, respeitando filiais."""
+
+    def importa(self, linhas, **opcoes):
+        from openpyxl import Workbook
+
+        planilha = Workbook()
+        planilha.active.append(["Cliente", "CNPJ", "Telefone"])
+        for linha in linhas:
+            planilha.active.append(list(linha))
+        with tempfile.TemporaryDirectory() as pasta:
+            caminho = os.path.join(pasta, "clientes.xlsx")
+            planilha.save(caminho)
+            saida = io.StringIO()
+            call_command("importar_clientes", caminho, stdout=saida, **opcoes)
+        return saida.getvalue()
+
+    def nomes(self):
+        return sorted(Cliente.objects.values_list("nome", flat=True))
+
+    def test_cadastra_novos_e_ignora_repetidos(self):
+        Cliente.objects.create(nome="Alfa Ltda", documento="11.111.111/0001-11")
+        saida = self.importa([
+            ("ALFA LTDA", "11111111000111", ""),      # mesmo nome e CNPJ
+            ("Beta", "22.222.222/0001-22", "7199990000"),
+            ("Beta", "22.222.222/0001-22", ""),       # repetido na planilha
+        ])
+        self.assertEqual(self.nomes(), ["Alfa Ltda", "Beta"])
+        self.assertIn("1 novos, 2 já cadastrados, 0 para revisar", saida)
+
+    def test_mesmo_cnpj_com_nome_diferente_e_filial(self):
+        Cliente.objects.create(nome="Matriz", documento="33.333.333/0001-33")
+        self.importa([("Filial Centro", "33.333.333/0001-33", "")])
+        self.assertEqual(self.nomes(), ["Filial Centro", "Matriz"])
+
+    def test_mesmo_nome_com_cnpj_diferente_vai_para_revisar(self):
+        Cliente.objects.create(nome="Master Truck", documento="23.425.699/7000-13")
+        saida = self.importa([("MASTER TRUCK", "23.425.69970001-37", "")])
+        self.assertEqual(self.nomes(), ["Master Truck"])
+        self.assertIn("Linha 2 para revisar", saida)
+        self.assertIn("1 para revisar", saida)
+
+    def test_mesmo_nome_sem_cnpj_cadastrado_vai_para_revisar(self):
+        Cliente.objects.create(nome="Sem Documento")
+        self.importa([("Sem Documento", "44.444.444/0001-44", "")])
+        self.assertEqual(Cliente.objects.count(), 1)
+
+    def test_linha_sem_cnpj_compara_so_pelo_nome(self):
+        Cliente.objects.create(nome="Órfão", documento="55.555.555/0001-55")
+        self.importa([("ORFAO", "SEM PREENCHIMENTO", ""), ("Novo", "", "")])
+        self.assertEqual(self.nomes(), ["Novo", "Órfão"])
+
+    def test_documento_sem_numeros_fica_vazio(self):
+        self.importa([("Gama", "SEM PREENCHIMENTO", "")])
+        self.assertEqual(Cliente.objects.get(nome="Gama").documento, "")
+
+    def test_remover_palavras_e_junta_as_linhas_da_mesma_empresa(self):
+        self.importa(
+            [
+                ("GUIMA MOTOS (IMPRESSORA)", "57.794.914/0001-99", ""),
+                ("GUIMA MOTOS (NOTEBOOK)", "57.794.914/0001-99", ""),
+                ("GUIMA NOTEBOOK", "06.723.468.0001-90", ""),
+                ("GUIMA", "06.723.468.0001-90", ""),
+                ("RENASCEÇA IMPRESSORA", "", ""),
+            ],
+            remover_palavras="notebook,impressora",
+        )
+        self.assertEqual(self.nomes(), ["GUIMA", "GUIMA MOTOS", "RENASCEÇA"])
+
+    def test_sem_a_opcao_as_palavras_ficam_no_nome(self):
+        self.importa([("RENASCEÇA IMPRESSORA", "", "")])
+        self.assertEqual(self.nomes(), ["RENASCEÇA IMPRESSORA"])
+
+    def test_simular_nao_grava(self):
+        saida = self.importa([("Delta", "66.666.666/0001-66", "")], simular=True)
+        self.assertEqual(Cliente.objects.count(), 0)
+        self.assertIn("SIMULAÇÃO", saida)
+        self.assertIn("1 novos", saida)
+
+    def test_linha_sem_nome_e_relatada(self):
+        saida = self.importa([("", "77.777.777/0001-77", "")])
+        self.assertEqual(Cliente.objects.count(), 0)
+        self.assertIn("sem nome", saida)
+
