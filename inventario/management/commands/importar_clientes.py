@@ -8,13 +8,19 @@ A primeira linha da planilha deve ser o cabeçalho. Colunas reconhecidas
 (maiúsculas e acentos não importam): nome, documento (CPF/CNPJ), telefone,
 e-mail, endereço e observações. Só o nome é obrigatório.
 
-Filiais podem repartir o mesmo CPF/CNPJ, então o CPF/CNPJ sozinho não define
-duplicata. Para cada linha:
-  - com CPF/CNPJ: já cadastrado se existe cliente com o mesmo nome e os mesmos
-    dígitos. Mesmo CPF/CNPJ com nome diferente é cliente novo (filial). Mesmo
-    nome com CPF/CNPJ diferente NÃO é cadastrado: a linha vai para a lista
-    "para revisar" (pode ser filial ou erro de digitação no CNPJ);
-  - sem CPF/CNPJ: já cadastrado se existe cliente com o mesmo nome.
+Um cliente é considerado já cadastrado quando:
+  - a linha tem CPF/CNPJ e já existe cliente com os mesmos dígitos (mesmo que o
+    nome esteja escrito de outro jeito); ou
+  - a linha não tem CPF/CNPJ e já existe cliente com o mesmo nome.
+
+Mesmo nome com CPF/CNPJ diferente (ou com CPF/CNPJ quando o cadastrado não tem)
+NÃO é cadastrado: a linha vai para a lista "para revisar" do relatório, porque
+pode ser filial ou erro de digitação no CNPJ.
+
+Com --filiais, o CPF/CNPJ sozinho deixa de bastar: filiais que dividem o mesmo
+CNPJ entram como clientes novos, e só é duplicata quando nome e CNPJ batem.
+Use só quando a planilha escreve os nomes do mesmo jeito que o sistema, senão
+o mesmo cliente com outro nome é cadastrado de novo.
 """
 import re
 import unicodedata
@@ -80,6 +86,10 @@ class Command(BaseCommand):
             help='Tira do nome o trecho final entre parênteses, ex.: "JAV MATRIZ (COD. X)".',
         )
         parser.add_argument(
+            "--filiais", action="store_true",
+            help="Mesmo CPF/CNPJ com nome diferente entra como cliente novo (filial).",
+        )
+        parser.add_argument(
             "--remover-palavras", type=str, default="",
             help='Palavras a tirar do nome, separadas por vírgula, ex.: "notebook,impressora".',
         )
@@ -107,9 +117,11 @@ class Command(BaseCommand):
         palavras = [p.strip() for p in options["remover_palavras"].split(",") if p.strip()]
 
         # nome (sem acento/caixa) -> CPF/CNPJs (só dígitos) já cadastrados com ele
-        docs_por_nome = {}
+        docs_por_nome, docs_existentes = {}, set()
         for nome, documento in Cliente.objects.values_list("nome", "documento"):
             docs_por_nome.setdefault(_chave_nome(nome), set()).add(_chave_documento(documento))
+            docs_existentes.add(_chave_documento(documento))
+        docs_existentes.discard("")
 
         criados, ignorados, para_revisar, com_erro = [], [], [], []
         with transaction.atomic():
@@ -131,6 +143,9 @@ class Command(BaseCommand):
                 doc = _chave_documento(dados.get("documento", ""))
                 if not doc:
                     dados["documento"] = ""  # ex.: "SEM PREENCHIMENTO"
+                if doc and doc in docs_existentes and not options["filiais"]:
+                    ignorados.append((numero, dados["nome"]))
+                    continue
                 chave = _chave_nome(dados["nome"])
                 docs_do_nome = docs_por_nome.get(chave)
                 if docs_do_nome is not None:
@@ -159,6 +174,8 @@ class Command(BaseCommand):
                 if not options["simular"]:
                     cliente.save()
                 docs_por_nome.setdefault(chave, set()).add(doc)
+                if doc:
+                    docs_existentes.add(doc)
                 criados.append((numero, cliente.nome))
 
         for numero, motivo in com_erro:
