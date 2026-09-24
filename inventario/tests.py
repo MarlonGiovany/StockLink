@@ -1343,9 +1343,31 @@ class ImportarClientesTests(TestCase):
         self.assertEqual(self.nomes(), ["Alfa Ltda", "Beta"])
         self.assertIn("1 novos, 2 já cadastrados, 0 para revisar", saida)
 
-    def test_mesmo_cnpj_com_nome_diferente_e_filial(self):
+    def test_mesmo_cnpj_com_nome_diferente_ja_esta_cadastrado(self):
+        Cliente.objects.create(nome="Clínica Qualidor", documento="46.683.617/0001-50")
+        saida = self.importa([
+            ("QUALIDOR", "46.683.617/0001-50", ""),   # nome escrito de outro jeito
+            ("QUALIDOR /", "46683617000150", ""),
+        ])
+        self.assertEqual(self.nomes(), ["Clínica Qualidor"])
+        self.assertIn("0 novos, 2 já cadastrados", saida)
+
+    def test_mesmo_cnpj_repetido_na_planilha_com_nomes_diferentes_entra_uma_vez(self):
+        self.importa([
+            ("Hospital Cirurgia", "13.016.332/0001-06", ""),
+            ("Hospital Cirurgia Recarga", "13.016.332/0001-06", ""),
+        ])
+        self.assertEqual(self.nomes(), ["Hospital Cirurgia"])
+
+    def test_filiais_mesmo_cnpj_com_nome_diferente_entra_como_filial(self):
         Cliente.objects.create(nome="Matriz", documento="33.333.333/0001-33")
-        self.importa([("Filial Centro", "33.333.333/0001-33", "")])
+        self.importa(
+            [
+                ("Filial Centro", "33.333.333/0001-33", ""),
+                ("MATRIZ", "33.333.333/0001-33", ""),   # mesmo nome e CNPJ
+            ],
+            filiais=True,
+        )
         self.assertEqual(self.nomes(), ["Filial Centro", "Matriz"])
 
     def test_mesmo_nome_com_cnpj_diferente_vai_para_revisar(self):
