@@ -8,9 +8,13 @@ A primeira linha da planilha deve ser o cabeçalho. Colunas reconhecidas
 (maiúsculas e acentos não importam): nome, documento (CPF/CNPJ), telefone,
 e-mail, endereço e observações. Só o nome é obrigatório.
 
-Um cliente é considerado já cadastrado quando:
-  - a linha tem CPF/CNPJ e já existe cliente com os mesmos dígitos; ou
-  - a linha não tem CPF/CNPJ e já existe cliente com o mesmo nome.
+Filiais podem repartir o mesmo CPF/CNPJ, então o CPF/CNPJ sozinho não define
+duplicata. Para cada linha:
+  - com CPF/CNPJ: já cadastrado se existe cliente com o mesmo nome e os mesmos
+    dígitos. Mesmo CPF/CNPJ com nome diferente é cliente novo (filial). Mesmo
+    nome com CPF/CNPJ diferente NÃO é cadastrado: a linha vai para a lista
+    "para revisar" (pode ser filial ou erro de digitação no CNPJ);
+  - sem CPF/CNPJ: já cadastrado se existe cliente com o mesmo nome.
 """
 import re
 import unicodedata
@@ -44,6 +48,15 @@ def _chave_documento(documento):
     return re.sub(r"\D", "", documento)
 
 
+def _sem_palavras(nome, palavras):
+    """Tira palavras soltas (ou entre parênteses) do nome, ex.: 'NOTEBOOK'."""
+    for palavra in palavras:
+        p = re.escape(palavra)
+        nome = re.sub(rf"\(\s*{p}\s*\)", " ", nome, flags=re.IGNORECASE)
+        nome = re.sub(rf"\b{p}\b", " ", nome, flags=re.IGNORECASE)
+    return " ".join(nome.split())
+
+
 def _texto(valor):
     """Célula do Excel -> texto. Números inteiros não viram '123.0'."""
     if valor is None:
@@ -64,7 +77,11 @@ class Command(BaseCommand):
         )
         parser.add_argument(
             "--sem-parenteses", action="store_true",
-            help='Tira do nome o trecho final entre parênteses, ex.: "GUIMA MOTOS (NOTEBOOK)".',
+            help='Tira do nome o trecho final entre parênteses, ex.: "JAV MATRIZ (COD. X)".',
+        )
+        parser.add_argument(
+            "--remover-palavras", type=str, default="",
+            help='Palavras a tirar do nome, separadas por vírgula, ex.: "notebook,impressora".',
         )
 
     def handle(self, *args, **options):
@@ -78,19 +95,23 @@ class Command(BaseCommand):
         except (OSError, ValueError) as erro:
             raise CommandError(f"Não consegui abrir o arquivo: {erro}")
 
-        linhas = planilha.active.iter_rows(values_only=True)
+        try:
+            linhas = iter(list(planilha.active.iter_rows(values_only=True)))
+        finally:
+            planilha.close()
         cabecalho = next(linhas, None)
         if not cabecalho:
             raise CommandError("A planilha está vazia.")
         indices = self._mapear_colunas(cabecalho)
 
-        docs_existentes, nomes_existentes = set(), set()
-        for nome, documento in Cliente.objects.values_list("nome", "documento"):
-            nomes_existentes.add(_chave_nome(nome))
-            if _chave_documento(documento):
-                docs_existentes.add(_chave_documento(documento))
+        palavras = [p.strip() for p in options["remover_palavras"].split(",") if p.strip()]
 
-        criados, ignorados, com_erro = [], [], []
+        # nome (sem acento/caixa) -> CPF/CNPJs (só dígitos) já cadastrados com ele
+        docs_por_nome = {}
+        for nome, documento in Cliente.objects.values_list("nome", "documento"):
+            docs_por_nome.setdefault(_chave_nome(nome), set()).add(_chave_documento(documento))
+
+        criados, ignorados, para_revisar, com_erro = [], [], [], []
         with transaction.atomic():
             for numero, linha in enumerate(linhas, start=2):
                 dados = {
@@ -99,6 +120,8 @@ class Command(BaseCommand):
                 }
                 if not any(dados.values()):
                     continue
+                if palavras and dados.get("nome"):
+                    dados["nome"] = _sem_palavras(dados["nome"], palavras)
                 if options["sem_parenteses"] and dados.get("nome"):
                     dados["nome"] = re.sub(r"\s*\([^)]*\)\s*$", "", dados["nome"])
                 if not dados.get("nome"):
@@ -108,12 +131,18 @@ class Command(BaseCommand):
                 doc = _chave_documento(dados.get("documento", ""))
                 if not doc:
                     dados["documento"] = ""  # ex.: "SEM PREENCHIMENTO"
-                if doc:
-                    repetido = doc in docs_existentes
-                else:
-                    repetido = _chave_nome(dados["nome"]) in nomes_existentes
-                if repetido:
-                    ignorados.append((numero, dados["nome"]))
+                chave = _chave_nome(dados["nome"])
+                docs_do_nome = docs_por_nome.get(chave)
+                if docs_do_nome is not None:
+                    if not doc or doc in docs_do_nome:
+                        ignorados.append((numero, dados["nome"]))
+                        continue
+                    outros = ", ".join(sorted(d for d in docs_do_nome if d)) or "nenhum"
+                    para_revisar.append((
+                        numero,
+                        f'"{dados["nome"]}" ({dados["documento"]}) já existe com '
+                        f"outro CPF/CNPJ (cadastrado: {outros})",
+                    ))
                     continue
 
                 cliente = Cliente(**dados)
@@ -129,17 +158,17 @@ class Command(BaseCommand):
 
                 if not options["simular"]:
                     cliente.save()
-                nomes_existentes.add(_chave_nome(cliente.nome))
-                if doc:
-                    docs_existentes.add(doc)
+                docs_por_nome.setdefault(chave, set()).add(doc)
                 criados.append((numero, cliente.nome))
 
         for numero, motivo in com_erro:
             self.stdout.write(self.style.WARNING(f"Linha {numero} não importada: {motivo}"))
+        for numero, motivo in para_revisar:
+            self.stdout.write(self.style.WARNING(f"Linha {numero} para revisar: {motivo}"))
         prefixo = "SIMULAÇÃO (nada foi gravado) - " if options["simular"] else ""
         self.stdout.write(self.style.SUCCESS(
             f"{prefixo}{len(criados)} novos, {len(ignorados)} já cadastrados, "
-            f"{len(com_erro)} com problema."
+            f"{len(para_revisar)} para revisar, {len(com_erro)} com problema."
         ))
 
     def _mapear_colunas(self, cabecalho):
