@@ -488,9 +488,14 @@ def fornecedor_novo(request):
 
 @login_required
 def cliente_lista(request):
-    """Lista de clientes, com busca pelo nome."""
+    """Lista de clientes, com busca pelo nome e quantas máquinas cada um tem
+    locadas hoje (locações ativas)."""
     termo = request.GET.get("q", "").strip()
-    clientes = Cliente.objects.all()
+    clientes = Cliente.objects.annotate(
+        maquinas_ativas=Count(
+            "locacoes__equipamento", filter=Q(locacoes__ativa=True), distinct=True
+        )
+    )
     if termo:
         clientes = clientes.filter(nome__icontains=termo)
     return render(
