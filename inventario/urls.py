@@ -28,6 +28,7 @@ urlpatterns = [
     path("contratos/<int:pk>/aditivo/", views.aditivo_novo, name="aditivo_novo"),
     path("contratos/<int:pk>/valor-em-lote/", views.locacao_valor_em_lote,
          name="locacao_valor_em_lote"),
+    path("aditivo/<int:pk>/editar/", views.aditivo_editar, name="aditivo_editar"),
     path("aditivo/<int:pk>/excluir/", views.aditivo_excluir, name="aditivo_excluir"),
 
     # PDFs passam pelo Django para a permissão valer (não são mais URL pública)
