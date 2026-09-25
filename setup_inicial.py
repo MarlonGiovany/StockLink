@@ -1,5 +1,6 @@
 import os, django
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+os.environ.setdefault("DJANGO_DEBUG", "True")  # roda no console, não é o site no ar
 django.setup()
 
 from getpass import getpass
