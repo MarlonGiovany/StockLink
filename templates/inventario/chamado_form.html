@@ -1,11 +1,14 @@
 {% extends "base.html" %}
-{% block titulo %}Abrir chamado — {{ nome_sistema }}{% endblock %}
+{% block titulo %}Abrir chamado — {{ nome_sistema }}</div>
+{% endblock %}
 {% block conteudo %}
+{% include "inventario/_chamados_estilo.html" %}
+<div class="area-chamados">
 
 <div class="row justify-content-center">
   <div class="col-lg-7">
     <div class="card shadow-sm">
-      <div class="card-body p-4">
+      <div class="card-body p-3 p-md-4">
         <h4 class="mb-1">Abrir chamado</h4>
         <p class="text-muted">
           Escolha o cliente primeiro — a lista de máquinas mostra só as dele.
@@ -38,7 +41,7 @@
             </div>
           {% endfor %}
 
-          <div class="d-flex justify-content-end gap-2">
+          <div class="d-flex flex-column-reverse flex-md-row justify-content-end gap-2">
             <a href="{% url 'chamado_lista' %}" class="btn btn-outline-secondary">Cancelar</a>
             <button type="submit" class="btn text-white" style="background:#16A34A;">
               Abrir chamado
