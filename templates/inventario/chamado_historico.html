@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block titulo %}Histórico por técnico — {{ nome_sistema }}{% endblock %}
 {% block conteudo %}
+{% include "inventario/_chamados_estilo.html" %}
+<div class="area-chamados">
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <div>
@@ -11,8 +13,13 @@
   </div>
 </div>
 
-<form method="get" class="row g-2 align-items-end mb-4">
-  <div class="col-md-4">
+<button class="btn btn-outline-primary w-100 mb-2 d-lg-none" type="button"
+        data-bs-toggle="collapse" data-bs-target="#filtros-historico"
+        aria-expanded="false" aria-controls="filtros-historico">
+  🔎 Filtros{% if cliente or status or tecnico or de or ate %} <span class="badge bg-primary ms-1">ativos</span>{% endif %}
+</button>
+<form method="get" id="filtros-historico" class="row g-2 align-items-end mb-4 collapse d-lg-flex">
+  <div class="col-12 col-md-4">
     <label class="form-label small text-muted mb-1">Cliente</label>
     <select name="cliente" class="form-select">
       <option value="">Todos</option>
@@ -23,7 +30,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-4">
+  <div class="col-12 col-md-4">
     <label class="form-label small text-muted mb-1">Técnico</label>
     <select name="tecnico" class="form-select">
       <option value="">Todos</option>
@@ -34,7 +41,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-4">
+  <div class="col-12 col-md-4">
     <label class="form-label small text-muted mb-1">Status</label>
     <select name="status" class="form-select">
       <option value="">Todos</option>
@@ -43,19 +50,19 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <label class="form-label small text-muted mb-1">De</label>
     <input type="date" name="de" value="{{ de }}" class="form-control">
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <label class="form-label small text-muted mb-1">Até</label>
     <input type="date" name="ate" value="{{ ate }}" class="form-control">
   </div>
-  <div class="col-md-3">
+  <div class="col-12 col-md-3">
     <button class="btn btn-primary w-100">Filtrar</button>
   </div>
   {% if cliente or status or tecnico or de or ate %}
-  <div class="col-md-3">
+  <div class="col-12 col-md-3">
     <a href="{% url 'chamado_historico' %}" class="btn btn-outline-secondary w-100">Limpar</a>
   </div>
   {% endif %}
@@ -76,8 +83,8 @@
     </div>
   </div>
 
-  <div class="table-responsive">
-    <table class="table table-sm table-hover align-middle mb-0">
+  <div class="table-responsive card-lista px-2 px-lg-0">
+    <table class="table table-sm table-hover align-middle mb-0 tabela-chamados">
       <thead class="table-light">
         <tr>
           <th>OS</th>
@@ -94,17 +101,17 @@
       </thead>
       <tbody>
         {% for c in linha.chamados %}
-        <tr>
-          <td class="fw-bold">{{ c.numero_os }}</td>
-          <td>
+        <tr class="linha-chamado{% if c.tecnico_id == user.pk %} minha-os{% endif %}" style="--cor-alerta: {{ c.alerta.cor }};">
+          <td class="cel-os fw-bold"><span class="d-lg-none text-muted fw-normal small">OS</span> {{ c.numero_os }}</td>
+          <td class="cel-urg">
             <span class="badge text-nowrap"
                   style="background:{{ c.alerta.cor }};color:{{ c.alerta.texto }};">
               {{ c.alerta.rotulo }}
             </span>
           </td>
-          <td class="text-nowrap">{{ c.aberto_em|date:"d/m/Y" }}</td>
-          <td class="text-nowrap">{{ c.aberto_em|date:"H:i" }}</td>
-          <td class="text-nowrap">
+          <td class="cel-abertura text-nowrap" data-label="Dia">{{ c.aberto_em|date:"d/m/Y" }}</td>
+          <td class="cel-status text-nowrap" data-label="Abertura">{{ c.aberto_em|date:"H:i" }}</td>
+          <td class="cel-tempo text-nowrap" data-label="Encerramento">
             {% if c.encerrado %}
               {{ c.encerrado_em|date:"H:i" }}
               {% if c.encerrado_em|date:"d/m/Y" != c.aberto_em|date:"d/m/Y" %}
@@ -114,22 +121,22 @@
               <span class="badge" style="background:#DC2626;">em aberto</span>
             {% endif %}
           </td>
-          <td class="text-nowrap">
+          <td class="cel-tempo text-nowrap" data-label="Tempo">
             {% if c.encerrado %}{{ c.duracao_texto }}{% else %}
               <span class="text-muted">há {{ c.tempo_aberto_texto }}</span>
             {% endif %}
           </td>
-          <td>{% if c.cliente %}{{ c.cliente|truncatechars:28 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-          <td class="text-nowrap">INF-{{ c.equipamento.numero_patrimonio }}</td>
-          <td>
+          <td class="cel-cliente" data-label="Cliente">{% if c.cliente %}{{ c.cliente|truncatechars:28 }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="cel-maquina text-nowrap" data-label="Máquina">INF-{{ c.equipamento.numero_patrimonio }}</td>
+          <td class="cel-desc" data-label="{% if c.encerrado %}O que foi feito{% else %}O que deve ser feito{% endif %}">
             {% if c.encerrado %}
               {{ c.realizado|truncatechars:60 }}
             {% else %}
               <span class="text-muted">{{ c.descricao|truncatechars:60 }}</span>
             {% endif %}
           </td>
-          <td class="text-end">
-            <a href="{% url 'chamado_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary py-0">OS</a>
+          <td class="cel-acoes text-end text-nowrap">
+            <a href="{% url 'chamado_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary py-0">Ver OS</a>
           </td>
         </tr>
         {% endfor %}
@@ -145,4 +152,5 @@
 </div>
 {% endfor %}
 
+</div>
 {% endblock %}

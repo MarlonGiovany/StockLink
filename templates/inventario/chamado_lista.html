@@ -1,8 +1,11 @@
 {% extends "base.html" %}
 {% block titulo %}Chamados — {{ nome_sistema }}{% endblock %}
 {% block conteudo %}
+{% include "inventario/_chamados_estilo.html" %}
+<div class="area-chamados">
 
-<div class="d-flex justify-content-between align-items-center mb-3">
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div class="d-flex justify-content-between align-items-start gap-2 col-12 col-lg-auto">
   <div>
     <h4 class="mb-0">
       {% if status == "ENCERRADO" %}Chamados encerrados
@@ -16,13 +19,23 @@
       <span class="badge bg-success">nenhum chamado em aberto</span>
     {% endif %}
   </div>
-  <div class="d-flex gap-2">
+    {# Celular: Painel e Histórico num menu ao lado do título #}
+    <div class="dropdown d-lg-none">
+      <button class="btn btn-outline-secondary dropdown-toggle" type="button"
+              data-bs-toggle="dropdown" aria-expanded="false">Mais</button>
+      <ul class="dropdown-menu dropdown-menu-end">
+        <li><a class="dropdown-item py-2" href="{% url 'chamado_painel' %}" target="_blank">🖥️ Painel da área técnica</a></li>
+        <li><a class="dropdown-item py-2" href="{% url 'chamado_historico' %}">📋 Histórico por técnico</a></li>
+      </ul>
+    </div>
+  </div>
+  <div class="d-flex flex-wrap gap-2 col-12 col-lg-auto">
     {% comment %}
     A tela abre só com os chamados em aberto. Estes botões são o caminho
     para os encerrados — que continuam todos guardados, só não ocupam a
     tela de quem entrou aqui para ver o que falta fazer.
     {% endcomment %}
-    <div class="btn-group" role="group">
+    <div class="btn-group flex-grow-1 flex-lg-grow-0 grupo-status" role="group">
       <a href="{% url 'chamado_lista' %}?status=ABERTO"
          class="btn {% if status == 'ABERTO' %}btn-primary{% else %}btn-outline-primary{% endif %}">
         Em aberto
@@ -37,22 +50,29 @@
         Todos
       </a>
     </div>
-    <a href="{% url 'chamado_painel' %}" class="btn btn-outline-secondary" target="_blank">
+    {# Desktop: os atalhos à vista (no celular estão no menu "Mais") #}
+    <a href="{% url 'chamado_painel' %}" class="btn btn-outline-secondary d-none d-lg-inline-block" target="_blank">
       🖥️ Painel da área técnica
     </a>
-    <a href="{% url 'chamado_historico' %}" class="btn btn-outline-secondary">
+    <a href="{% url 'chamado_historico' %}" class="btn btn-outline-secondary d-none d-lg-inline-block">
       📋 Histórico por técnico
     </a>
     {% if perms.inventario.add_chamado %}
-      <a href="{% url 'chamado_novo' %}" class="btn text-white" style="background:#16A34A;">
+      <a href="{% url 'chamado_novo' %}" class="btn text-white col-12 col-lg-auto" style="background:#16A34A;">
         + Abrir chamado
       </a>
     {% endif %}
   </div>
 </div>
 
-<form method="get" class="row g-2 align-items-end mb-3">
-  <div class="col-md-4">
+{# No celular os filtros ficam recolhidos atrás deste botão; no desktop, sempre à vista #}
+<button class="btn btn-outline-primary w-100 mb-2 d-lg-none" type="button"
+        data-bs-toggle="collapse" data-bs-target="#filtros-chamados"
+        aria-expanded="false" aria-controls="filtros-chamados">
+  🔎 Filtros{% if cliente or tecnico or de or ate %} <span class="badge bg-primary ms-1">ativos</span>{% endif %}
+</button>
+<form method="get" id="filtros-chamados" class="row g-2 align-items-end mb-3 collapse d-lg-flex">
+  <div class="col-12 col-md-4">
     <label class="form-label small text-muted mb-1">Cliente</label>
     <select name="cliente" class="form-select">
       <option value="">Todos</option>
@@ -63,7 +83,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-4">
+  <div class="col-12 col-md-4">
     <label class="form-label small text-muted mb-1">Status</label>
     <select name="status" class="form-select">
       <option value="">Todos</option>
@@ -72,7 +92,7 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-4">
+  <div class="col-12 col-md-4">
     <label class="form-label small text-muted mb-1">Técnico</label>
     <select name="tecnico" class="form-select">
       <option value="">Todos</option>
@@ -83,19 +103,19 @@
       {% endfor %}
     </select>
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <label class="form-label small text-muted mb-1">De</label>
     <input type="date" name="de" value="{{ de }}" class="form-control">
   </div>
-  <div class="col-md-3">
+  <div class="col-6 col-md-3">
     <label class="form-label small text-muted mb-1">Até</label>
     <input type="date" name="ate" value="{{ ate }}" class="form-control">
   </div>
-  <div class="col-md-3">
+  <div class="col-12 col-md-3">
     <button class="btn btn-primary w-100">Filtrar</button>
   </div>
   {% if cliente or tecnico or de or ate or status != "ABERTO" %}
-  <div class="col-md-3">
+  <div class="col-12 col-md-3">
     <a href="{% url 'chamado_lista' %}" class="btn btn-outline-secondary w-100">Limpar</a>
   </div>
   {% endif %}
@@ -104,20 +124,32 @@
 {% if pode_excluir %}
 <form method="post" action="{% url 'chamado_excluir' %}" id="form-excluir">
   {% csrf_token %}
-  <div class="d-flex align-items-center gap-2 mb-2">
+  <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
     <button type="submit" class="btn btn-sm btn-outline-danger" id="btn-excluir" disabled>
       🗑️ Excluir selecionados (<span id="conta-excluir">0</span>)
     </button>
-    <span class="small text-muted">Só o Analista vê esta opção. Antes de apagar, aparece a lista para confirmar.</span>
+    <label class="d-lg-none small d-flex align-items-center gap-2 mb-0">
+      <input type="checkbox" class="form-check-input mt-0 marcar-todos-excluir"> Marcar todos
+    </label>
+    <span class="small text-muted d-none d-lg-inline">Só o Analista vê esta opção. Antes de apagar, aparece a lista para confirmar.</span>
   </div>
 {% endif %}
-<div class="card shadow-sm">
+
+{% if chamados %}
+<p class="dica-toque small text-muted mb-2" style="display:none;">
+  Toque no chamado para ver mais detalhes.
+  <span class="dica-duplo">Toque duas vezes numa
+  <span class="badge selo-minha-os">Sua OS</span> para abri-la.</span>
+</p>
+{% endif %}
+
+<div class="card shadow-sm card-lista">
   <div class="table-responsive">
-    <table class="table table-hover align-middle mb-0">
+    <table class="table table-hover align-middle mb-0 tabela-chamados">
       <thead class="table-light">
         <tr>
           {% if pode_excluir %}
-            <th><input type="checkbox" class="form-check-input" id="marcar-todos-excluir" title="Marcar todos"></th>
+            <th><input type="checkbox" class="form-check-input marcar-todos-excluir" title="Marcar todos"></th>
           {% endif %}
           <th>OS</th>
           <th>Urgência</th>
@@ -133,30 +165,41 @@
       </thead>
       <tbody>
         {% for c in chamados %}
-        <tr>
+        <tr class="linha-chamado{% if c.tecnico_id == user.pk %} minha-os{% endif %}"
+            style="--cor-alerta: {{ c.alerta.cor }};"
+            data-url="{% url 'chamado_detalhe' c.pk %}">
           {% if pode_excluir %}
-            <td><input type="checkbox" class="form-check-input marca-excluir" name="chamados" value="{{ c.pk }}"></td>
+            <td class="cel-sel"><label class="d-flex align-items-center gap-2 mb-0">
+              <input type="checkbox" class="form-check-input mt-0 marca-excluir" name="chamados" value="{{ c.pk }}">
+              <span class="d-lg-none small text-muted">Selecionar para excluir</span>
+            </label></td>
           {% endif %}
-          <td class="fw-bold">{{ c.numero_os }}</td>
-          <td>
+          <td class="cel-os fw-bold text-nowrap">
+            <span class="d-lg-none text-muted fw-normal small">OS</span> {{ c.numero_os }}
+            {% if c.tecnico_id == user.pk %}<span class="badge selo-minha-os ms-1">Sua OS</span>{% endif %}
+          </td>
+          <td class="cel-urg">
             <span class="badge text-nowrap"
                   style="background:{{ c.alerta.cor }};color:{{ c.alerta.texto }};">
               {{ c.alerta.rotulo }}
             </span>
           </td>
-          <td class="text-nowrap">
+          <td class="cel-abertura text-nowrap" data-label="Abertura">
             {{ c.aberto_em|date:"d/m/Y" }}<br>
             <span class="text-muted small">{{ c.aberto_em|date:"H:i" }}</span>
           </td>
-          <td>{% if c.cliente %}{{ c.cliente }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-          <td>
+          <td class="cel-cliente" data-label="Cliente">{% if c.cliente %}{{ c.cliente }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+          <td class="cel-maquina" data-label="Máquina">
             <a href="{% url 'equipamento_detalhe' c.equipamento.pk %}">
               INF-{{ c.equipamento.numero_patrimonio }}</a>
             <div class="small text-muted">{{ c.equipamento.marca }} {{ c.equipamento.modelo }}</div>
           </td>
-          <td>{{ c.descricao|truncatechars:70 }}</td>
-          <td>{% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}—{% endif %}</td>
-          <td class="text-nowrap">
+          <td class="cel-desc secundario" data-label="O que deve ser feito">
+            <span class="desc-curta">{{ c.descricao|truncatechars:70 }}</span>
+            <span class="desc-completa">{{ c.descricao }}</span>
+          </td>
+          <td class="cel-tecnico" data-label="Técnico">{% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}—{% endif %}</td>
+          <td class="cel-status text-nowrap" data-label="{% if c.encerrado %}Encerramento{% else %}Status{% endif %}">
             {% if c.encerrado %}
               {{ c.encerrado_em|date:"d/m/Y" }}<br>
               <span class="text-muted small">{{ c.encerrado_em|date:"H:i" }}</span>
@@ -164,26 +207,28 @@
               <span class="badge" style="background:#DC2626;">Aberto</span>
             {% endif %}
           </td>
-          <td class="text-nowrap">
+          <td class="cel-tempo secundario text-nowrap" data-label="Tempo">
             {% if c.encerrado %}
               {{ c.duracao_texto }}
             {% else %}
               <span class="text-muted">há {{ c.tempo_aberto_texto }}</span>
             {% endif %}
           </td>
-          <td class="text-end text-nowrap">
-            {% if c.arquivo_os %}
-              <span class="badge bg-light text-dark border" title="OS digitalizada anexada">📎</span>
-            {% endif %}
-            <a href="{% url 'chamado_imprimir' c.pk %}" target="_blank"
-               class="btn btn-sm btn-outline-secondary" title="Imprimir a OS física">🖨️</a>
-            <a href="{% url 'chamado_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary">
-              Ver OS
-            </a>
+          <td class="cel-acoes text-end text-nowrap">
+            <div class="acoes d-inline-flex gap-1 align-items-center">
+              {% if c.arquivo_os %}
+                <span class="badge bg-light text-dark border align-self-center" title="OS digitalizada anexada">📎</span>
+              {% endif %}
+              <a href="{% url 'chamado_imprimir' c.pk %}" target="_blank"
+                 class="btn btn-sm btn-outline-secondary btn-imprimir" title="Imprimir a OS física">🖨️</a>
+              <a href="{% url 'chamado_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary">
+                Ver OS
+              </a>
+            </div>
           </td>
         </tr>
         {% empty %}
-        <tr>
+        <tr class="vazio">
           <td colspan="{% if pode_excluir %}11{% else %}10{% endif %}" class="text-center text-muted py-4">
             Nenhum chamado encontrado.
           </td>
@@ -195,30 +240,78 @@
 </div>
 {% if pode_excluir %}</form>{% endif %}
 
+</div>
 {% endblock %}
 
 {% block scripts %}
-{% if pode_excluir %}
 <script>
+// Celular: tocar no card mostra/esconde os detalhes; tocar duas vezes na
+// "Sua OS" abre a Ordem de Serviço. Só vale sobre o próprio card — toque em
+// link, botão ou caixinha segue o comportamento normal. No desktop (tabela)
+// nada muda: a OS abre pelo botão "Ver OS", como sempre.
 (function () {
-  const todos = document.getElementById('marcar-todos-excluir');
-  const marcas = document.querySelectorAll('.marca-excluir');
+  const celular = window.matchMedia('(max-width: 991.98px)');
+  const INTERVALO = 300;   // ms entre os dois toques
+  let ultimo = { linha: null, quando: 0, timer: null };
+
+  if (!document.querySelector('tr.minha-os')) {
+    document.querySelectorAll('.dica-duplo').forEach(function (d) { d.remove(); });
+  }
+
+  function interativo(el) {
+    return el.closest('a, button, input, label, select, textarea');
+  }
+
+  document.querySelectorAll('.tabela-chamados tr.linha-chamado').forEach(function (linha) {
+    linha.addEventListener('click', function (evento) {
+      if (!celular.matches || interativo(evento.target)) return;
+      const agora = Date.now();
+      const minha = linha.classList.contains('minha-os');
+
+      if (minha && ultimo.linha === linha && agora - ultimo.quando < INTERVALO) {
+        clearTimeout(ultimo.timer);
+        ultimo = { linha: null, quando: 0, timer: null };
+        linha.style.opacity = '.6';
+        window.location.href = linha.dataset.url;
+        return;
+      }
+
+      clearTimeout(ultimo.timer);
+      ultimo.linha = linha;
+      ultimo.quando = agora;
+      // Na "Sua OS" o primeiro toque espera um instante: se vier o segundo,
+      // abre a OS em vez de expandir. Nas outras, expande na hora.
+      ultimo.timer = setTimeout(function () {
+        linha.classList.toggle('expandido');
+      }, minha ? INTERVALO : 0);
+    });
+  });
+})();
+
+{% if pode_excluir %}
+(function () {
   const botao = document.getElementById('btn-excluir');
   const conta = document.getElementById('conta-excluir');
+  const marcas = Array.from(document.querySelectorAll('.marca-excluir'));
+  const todos = Array.from(document.querySelectorAll('.marcar-todos-excluir'));
 
   function atualiza() {
-    const n = document.querySelectorAll('.marca-excluir:checked').length;
+    const n = marcas.filter(function (m) { return m.checked; }).length;
     conta.textContent = n;
     botao.disabled = n === 0;
-    todos.checked = n > 0 && n === marcas.length;
-    todos.indeterminate = n > 0 && n < marcas.length;
+    todos.forEach(function (t) {
+      t.checked = n > 0 && n === marcas.length;
+      t.indeterminate = n > 0 && n < marcas.length;
+    });
   }
-  todos.addEventListener('change', function () {
-    marcas.forEach(function (m) { m.checked = todos.checked; });
-    atualiza();
+  todos.forEach(function (t) {
+    t.addEventListener('change', function () {
+      marcas.forEach(function (m) { m.checked = t.checked; });
+      atualiza();
+    });
   });
   marcas.forEach(function (m) { m.addEventListener('change', atualiza); });
 })();
-</script>
 {% endif %}
+</script>
 {% endblock %}

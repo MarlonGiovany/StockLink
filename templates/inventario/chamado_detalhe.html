@@ -1,27 +1,46 @@
 {% extends "base.html" %}
 {% block titulo %}OS {{ chamado.numero_os }} — {{ nome_sistema }}{% endblock %}
 {% block conteudo %}
+{% include "inventario/_chamados_estilo.html" %}
+<div class="area-chamados">
 
-<div class="d-flex justify-content-between align-items-start mb-3">
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
   <div>
     <a href="{% url 'chamado_lista' %}" class="text-decoration-none small">← Painel de chamados</a>
     <h4 class="mb-0 mt-1">Ordem de Serviço {{ chamado.numero_os }}</h4>
   </div>
-  <div class="d-flex gap-2 align-items-start">
+  <div class="d-flex flex-wrap gap-2 align-items-center">
     <a href="{% url 'chamado_imprimir' chamado.pk %}" target="_blank"
-       class="btn text-white" style="background:#162D63;">
+       class="btn text-white d-none d-lg-inline-block" style="background:#162D63;">
       🖨️ Imprimir OS
     </a>
-    <span class="badge fs-6 align-self-center"
+    {% if chamado.tecnico_id == user.pk %}
+      <span class="badge fs-6 selo-minha-os">Sua OS</span>
+    {% endif %}
+    <span class="badge fs-6"
           style="background:{{ chamado.alerta.cor }};color:{{ chamado.alerta.texto }};">
       {{ chamado.alerta.icone }} {{ chamado.alerta.rotulo }}
     </span>
     {% if chamado.encerrado %}
-      <span class="badge fs-6 align-self-center" style="background:#16A34A;">Encerrado</span>
+      <span class="badge fs-6" style="background:#16A34A;">Encerrado</span>
     {% else %}
-      <span class="badge fs-6 align-self-center" style="background:#DC2626;">Aberto</span>
+      <span class="badge fs-6" style="background:#DC2626;">Aberto</span>
     {% endif %}
   </div>
+</div>
+
+{# Celular: as ações principais logo no topo, sem precisar rolar até elas #}
+<div class="d-flex gap-2 mb-3 d-lg-none">
+  <a href="{% url 'chamado_imprimir' chamado.pk %}" target="_blank"
+     class="btn text-white flex-fill" style="background:#162D63;">🖨️ Imprimir</a>
+  {% if pode_encerrar and not chamado.encerrado %}
+    <a href="#execucao" class="btn text-white flex-fill" style="background:#16A34A;">✔ Encerrar</a>
+  {% endif %}
+  {% if chamado.arquivo_os %}
+    <a href="{% url 'chamado_arquivo' chamado.pk %}" target="_blank" class="btn btn-outline-primary flex-fill">📎 Ver anexo</a>
+  {% elif pode_encerrar %}
+    <a href="#os-digitalizada" class="btn btn-outline-primary flex-fill">📎 Anexar</a>
+  {% endif %}
 </div>
 
 {% if chamado.urgente and not chamado.encerrado %}
@@ -91,7 +110,7 @@
   </div>
 
   {# ---------- Execução: o que o técnico registrou ---------- #}
-  <div class="col-lg-6">
+  <div class="col-lg-6" id="execucao" style="scroll-margin-top:1rem;">
     <div class="card shadow-sm h-100">
       <div class="card-body">
         <h6 class="text-uppercase text-muted mb-3">Execução</h6>
@@ -204,7 +223,7 @@
 </div>
 
 {# ---------- A OS física digitalizada ---------- #}
-<div class="card shadow-sm mt-3">
+<div class="card shadow-sm mt-3" id="os-digitalizada" style="scroll-margin-top:1rem;">
   <div class="card-body">
     <h6 class="text-uppercase text-muted mb-2">OS digitalizada</h6>
 
@@ -268,4 +287,5 @@
   </div>
 </div>
 
+</div>
 {% endblock %}

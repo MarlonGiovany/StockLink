@@ -1,0 +1,96 @@
+{% comment %}
+Estilo da área de chamados no celular (lista, ficha da OS, histórico e
+abertura). Fica num include — e não num .css em static/ — para não depender
+de rodar `collectstatic` a cada deploy no PythonAnywhere.
+
+A mesma tabela serve às duas telas: no desktop é a tabela de sempre; abaixo
+de 992px (celular e tablet) cada linha vira um card (a tabela não é duplicada). Cada célula diz
+o próprio rótulo em `data-label`, e a ordem no card vem da classe `cel-*`.
+{% endcomment %}
+<style>
+  /* Selo "Sua OS" e destaque da linha do técnico logado — em qualquer tela */
+  .selo-minha-os { background:#2563EB; color:#fff; }
+  .tabela-chamados tr.minha-os > td:first-child { box-shadow: inset 4px 0 0 #2563EB; }
+
+  @media (max-width: 991.98px) {
+    /* Toque confortável: nada de botão ou campo miúdo no celular */
+    .area-chamados .btn:not(.btn-link) {
+      min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+    }
+    .area-chamados .form-control, .area-chamados .form-select { min-height: 44px; font-size: 16px; }
+    .area-chamados .form-check-input { width: 1.4em; height: 1.4em; }
+    .area-chamados h4 { font-size: 1.25rem; }
+    /* Os três botões de status cabem lado a lado até em 320px */
+    .area-chamados .grupo-status .btn {
+      flex: 1 1 auto; padding-left: .4rem; padding-right: .4rem;
+      font-size: .9rem; white-space: nowrap;
+    }
+
+    /* ---------- Tabela -> cards ---------- */
+    .area-chamados .card-lista { background: transparent; border: 0; box-shadow: none !important; }
+    .area-chamados .card-lista > .table-responsive { overflow: visible; }
+    .tabela-chamados, .tabela-chamados tbody { display: block; }
+    .tabela-chamados thead { display: none; }
+    .tabela-chamados tr.linha-chamado {
+      display: grid; grid-template-columns: 1fr auto; gap: .35rem .75rem;
+      padding: .8rem .9rem; margin-bottom: .75rem;
+      background: var(--bs-body-bg); border: 1px solid var(--bs-border-color);
+      border-left: 6px solid var(--cor-alerta, var(--bs-border-color));
+      border-radius: .75rem; box-shadow: 0 1px 2px rgba(0,0,0,.06);
+      touch-action: manipulation;          /* toque duplo não dá zoom */
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tabela-chamados tr.linha-chamado.minha-os { border-color: #2563EB; border-left-color: #2563EB; }
+    .tabela-chamados tr.linha-chamado.minha-os > td:first-child { box-shadow: none; }
+    .tabela-chamados tr.linha-chamado > td {
+      display: block; padding: 0; border: 0; background: transparent !important;
+      min-width: 0; overflow-wrap: anywhere;
+    }
+    .tabela-chamados td[data-label]::before {
+      content: attr(data-label); display: block;
+      font-size: .7rem; text-transform: uppercase; letter-spacing: .03em;
+      color: var(--bs-secondary-color);
+    }
+    /* Ordem e largura de cada informação no card */
+    .tabela-chamados .cel-sel      { order: 0;  grid-column: 1 / -1; }
+    .tabela-chamados .cel-os       { order: 1;  font-size: 1.15rem; }
+    .tabela-chamados .cel-urg      { order: 2;  justify-self: end; align-self: start; }
+    .tabela-chamados .cel-cliente  { order: 3;  grid-column: 1 / -1; font-weight: 600; }
+    .tabela-chamados .cel-maquina  { order: 4;  grid-column: 1 / -1; }
+    .tabela-chamados .cel-abertura { order: 5; }
+    .tabela-chamados .cel-status   { order: 6;  justify-self: end; text-align: right; }
+    .tabela-chamados .cel-tecnico  { order: 7;  grid-column: 1 / -1; }
+    .tabela-chamados .cel-desc     { order: 8;  grid-column: 1 / -1; }
+    .tabela-chamados .cel-tempo    { order: 9;  grid-column: 1 / -1; }
+    .tabela-chamados .cel-acoes    { order: 10; grid-column: 1 / -1; text-align: left !important; }
+    .tabela-chamados .cel-abertura br, .tabela-chamados .cel-status br { display: none; }
+    .tabela-chamados .cel-abertura .small, .tabela-chamados .cel-status .small { margin-left: .25rem; }
+
+    /* Informação secundária aparece ao tocar no card */
+    .tabela-chamados tr.linha-chamado .secundario { display: none; }
+    .tabela-chamados tr.linha-chamado.expandido .secundario { display: block; }
+    .tabela-chamados .desc-curta { display: none; }
+    .tabela-chamados .desc-completa { white-space: pre-wrap; }
+
+    .tabela-chamados .cel-acoes .acoes { display: flex !important; width: 100%; gap: .5rem; margin-top: .35rem; }
+    .tabela-chamados .cel-acoes .acoes .btn { flex: 1 1 0; }
+    .tabela-chamados .cel-acoes > .btn { width: 100%; margin-top: .35rem; }
+    .tabela-chamados .cel-acoes .acoes .btn-imprimir { flex: 0 0 auto; min-width: 52px; }
+    .tabela-chamados tr.vazio { display: block; }
+    .tabela-chamados tr.vazio > td { display: block; }
+
+    .dica-toque { display: block !important; }
+  }
+
+  /* Tablet: os cards em duas colunas, aproveitando a largura */
+  @media (min-width: 576px) and (max-width: 991.98px) {
+    .tabela-chamados tbody { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .tabela-chamados tr.linha-chamado { margin-bottom: 0; align-content: start; }
+    .tabela-chamados tr.vazio { grid-column: 1 / -1; }
+  }
+
+  /* Desktop: a descrição completa fica escondida (a tabela mostra a curta) */
+  @media (min-width: 992px) {
+    .tabela-chamados .desc-completa { display: none; }
+  }
+</style>

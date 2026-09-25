@@ -8,6 +8,7 @@ import importlib
 import io
 import json
 import os
+import re
 import tempfile
 from datetime import timedelta
 from decimal import Decimal
@@ -1684,6 +1685,22 @@ class TecnicoTests(BaseComPerfis):
         self.assertEqual(lista.context["abertos"], 1)
         historico = self.client.get(reverse("chamado_historico"))
         self.assertEqual(historico.context["total"], 1)
+
+    def test_card_da_propria_os_marcado_para_o_toque_duplo(self):
+        self.client.force_login(self.recepcao)   # vê as duas OS
+        Chamado.objects.filter(pk=self.chamado_outro.pk).update(tecnico=self.recepcao)
+        html = self.client.get(reverse("chamado_lista"), {"status": ""}).content.decode()
+        propria = reverse("chamado_detalhe", args=[self.chamado_outro.pk])
+        alheia = reverse("chamado_detalhe", args=[self.chamado.pk])
+        # Cada card: a abertura do <tr> até o data-url, com a classe no meio
+        cards = dict(
+            (url, classes) for classes, url in
+            re.findall(r'<tr class="(linha-chamado[^"]*)"[^>]*?data-url="([^"]+)"', html, re.S)
+        )
+        self.assertEqual(cards[propria], "linha-chamado minha-os")
+        self.assertEqual(cards[alheia], "linha-chamado")
+        # Selo "Sua OS" só no card dele (fora a legenda da dica de toque)
+        self.assertEqual(html.count('ms-1">Sua OS</span>'), 1)
 
     def test_os_de_outro_tecnico_da_403(self):
         for rota in ("chamado_detalhe", "chamado_imprimir", "chamado_arquivo"):
