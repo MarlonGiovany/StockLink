@@ -262,8 +262,8 @@ class Contrato(models.Model):
         verbose_name = "Contrato"
         verbose_name_plural = "Contratos"
         ordering = ["-data_contrato", "-id"]
-        # Áreas restritas do sistema. Quem concede é o owner (o primeiro
-        # usuário cadastrado), na tela "Usuários e permissões".
+        # Áreas restritas do sistema. Quem concede é o Analista
+        # (settings.USUARIO_ANALISTA), na tela "Usuários e permissões".
         permissions = [
             ("ver_contratos", "Pode ver a aba de Contratos"),
             ("ver_pdfs", "Pode abrir os PDFs anexados"),

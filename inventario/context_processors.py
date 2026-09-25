@@ -6,7 +6,7 @@ O menu do topo (base.html) precisa deles em toda página.
 
 from django.conf import settings
 
-from .permissoes import eh_admin, eh_owner, pode_ver_contratos, pode_ver_pdfs
+from .permissoes import eh_analista, pode_ver_contratos, pode_ver_pdfs
 
 
 def identidade(request):
@@ -24,8 +24,7 @@ def identidade(request):
 def permissoes(request):
     user = getattr(request, "user", None)
     return {
-        "eh_owner": eh_owner(user),
-        "eh_admin": eh_admin(user),
+        "eh_analista": eh_analista(user),
         "pode_ver_contratos": pode_ver_contratos(user),
         "pode_ver_pdfs": pode_ver_pdfs(user),
     }

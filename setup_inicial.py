@@ -5,7 +5,7 @@ django.setup()
 
 from getpass import getpass
 
-from django.contrib.auth.models import User, Group, Permission
+from django.contrib.auth.models import User, Group
 
 # Superusuario admin
 if not User.objects.filter(username="admin").exists():
@@ -16,24 +16,11 @@ if not User.objects.filter(username="admin").exists():
 else:
     print("Superusuario 'admin' ja existe")
 
-# Grupo Operador: pode ver, cadastrar e registrar manutencao/locacao, mas NAO excluir
-grupo, _ = Group.objects.get_or_create(name="Operador")
-codenames = [
-    "add_equipamento", "change_equipamento", "view_equipamento",
-    "add_produto", "view_produto",
-    "add_manutencao", "view_manutencao",
-    "add_locacao", "change_locacao", "view_locacao",
-    "add_cliente", "view_cliente",
-    "add_fornecedor", "view_fornecedor",
-    "add_contrato", "change_contrato", "view_contrato",
-    "add_aditivo", "change_aditivo", "view_aditivo",
-    "view_movimentacao",
-]
-perms = Permission.objects.filter(codename__in=codenames, content_type__app_label="inventario")
-grupo.permissions.set(perms)
-print(f"Grupo 'Operador' configurado com {perms.count()} permissoes")
+# Grupos dos perfis ("Técnico" e "Recepção") vêm da migração 0018.
+# O login "admin" é o Analista (settings.USUARIO_ANALISTA).
+grupo = Group.objects.get(name="Técnico")
 
-# Usuario comum de exemplo
+# Técnico de exemplo
 if not User.objects.filter(username="operador").exists():
     operador_senha = os.environ.get("OPERADOR_SENHA") or getpass("Senha do operador: ")
     u = User.objects.create_user("operador", password=operador_senha)

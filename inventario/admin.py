@@ -1,9 +1,13 @@
 from django import forms
 from django.contrib import admin
 from django.contrib.admin.widgets import AdminFileWidget
+from django.contrib.auth import get_user_model
+from django.contrib.auth.admin import GroupAdmin, UserAdmin
+from django.contrib.auth.models import Group
 from django.db import models
 
 from .forms import LinkProtegidoMixin, protege_arquivo
+from .permissoes import eh_analista
 from .models import (
     Aditivo,
     Chamado,
@@ -21,6 +25,40 @@ from .models import (
 admin.site.site_header = "StockLink — Administração"
 admin.site.site_title = "StockLink"
 admin.site.index_title = "Painel de administração"
+
+
+# Usuários e grupos: só o Analista vê e mexe. Um superusuário que não é o Analista entra no
+# /admin/ para cuidar dos dados, mas não consegue se dar (nem dar a ninguém)
+# permissão, perfil ou superusuário — isso é do Analista.
+class SoAnalistaMixin:
+    def has_module_permission(self, request):
+        return eh_analista(request.user)
+
+    def has_view_permission(self, request, obj=None):
+        return eh_analista(request.user)
+
+    def has_add_permission(self, request):
+        return eh_analista(request.user)
+
+    def has_change_permission(self, request, obj=None):
+        return eh_analista(request.user)
+
+    def has_delete_permission(self, request, obj=None):
+        return eh_analista(request.user)
+
+
+class UsuarioAdmin(SoAnalistaMixin, UserAdmin):
+    pass
+
+
+class GrupoAdmin(SoAnalistaMixin, GroupAdmin):
+    pass
+
+
+admin.site.unregister(get_user_model())
+admin.site.unregister(Group)
+admin.site.register(get_user_model(), UsuarioAdmin)
+admin.site.register(Group, GrupoAdmin)
 
 
 # PDFs e OS digitalizadas: o "Atualmente: arquivo" do admin abre pela view que
