@@ -7,8 +7,9 @@
       <h5 class="text-danger">Excluir {{ chamados|length }} chamado{{ chamados|pluralize }} encerrado{{ chamados|pluralize }}</h5>
       <p>
         Estes chamados e as OS digitalizadas anexadas a eles serão apagados
-        <strong>de vez</strong> — não dá para desfazer. O número das próximas OS
-        continua de onde parou.
+        <strong>de vez</strong> — não dá para desfazer.
+        {% if not apaga_todos %}O número das próximas OS continua de onde parou
+        (ainda sobram outros chamados no sistema).{% endif %}
       </p>
       <div class="table-responsive mb-3">
         <table class="table table-sm align-middle mb-0">
@@ -33,6 +34,16 @@
         {% csrf_token %}
         {% for c in chamados %}<input type="hidden" name="chamados" value="{{ c.pk }}">{% endfor %}
         <input type="hidden" name="confirmar" value="1">
+        {% if apaga_todos %}
+          <div class="form-check mb-3 p-2 ps-4 border rounded-3" style="background:#f8fafc;">
+            <input class="form-check-input" type="checkbox" name="recomecar" id="recomecar" checked>
+            <label class="form-check-label" for="recomecar">
+              <strong>Recomeçar a numeração das OS em 0001</strong><br>
+              <span class="small text-muted">Estes são todos os chamados do sistema — depois de
+              apagá-los, o próximo chamado aberto será a OS 0001.</span>
+            </label>
+          </div>
+        {% endif %}
         <button class="btn btn-danger">Sim, excluir {{ chamados|length }} chamado{{ chamados|pluralize }}</button>
         <a href="{{ voltar }}" class="btn btn-outline-secondary">Cancelar</a>
       </form>

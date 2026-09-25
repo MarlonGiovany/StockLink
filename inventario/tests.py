@@ -1944,6 +1944,43 @@ class ExclusaoDeChamadosTests(BaseComPerfis):
             self.assertEqual(resposta.status_code, 403, usuario.username)
         self.assertTrue(Chamado.objects.filter(pk=self.chamado_outro.pk).exists())
 
+    def encerra_o_aberto(self):
+        Chamado.objects.filter(pk=self.chamado.pk).update(
+            status=Chamado.Status.ENCERRADO, encerrado_em=timezone.now(),
+            realizado="Teste.",
+        )
+
+    def novo_chamado(self):
+        return Chamado.objects.create(
+            cliente=self.cliente, equipamento=self.maquina, descricao="Novo",
+            tecnico=self.user, aberto_por=self.user,
+        )
+
+    def test_apagando_todos_a_proxima_os_e_a_0001(self):
+        self.encerra_o_aberto()
+        todos = [self.chamado.pk, self.chamado_outro.pk]
+        tela = self.client.post(self.url, {"chamados": todos})
+        self.assertTrue(tela.context["apaga_todos"])
+        self.client.post(
+            self.url, {"chamados": todos, "confirmar": "1", "recomecar": "on"}
+        )
+        self.assertEqual(self.novo_chamado().numero_os, "0001")
+
+    def test_sem_marcar_recomecar_a_numeracao_continua(self):
+        self.encerra_o_aberto()
+        todos = [self.chamado.pk, self.chamado_outro.pk]
+        self.client.post(self.url, {"chamados": todos, "confirmar": "1"})
+        self.assertGreater(self.novo_chamado().pk, max(todos))
+
+    def test_nao_recomeca_se_sobrar_chamado(self):
+        tela = self.client.post(self.url, {"chamados": [self.chamado_outro.pk]})
+        self.assertFalse(tela.context["apaga_todos"])
+        self.client.post(
+            self.url,
+            {"chamados": [self.chamado_outro.pk], "confirmar": "1", "recomecar": "on"},
+        )
+        self.assertGreater(self.novo_chamado().pk, self.chamado_outro.pk)
+
     def test_numero_da_proxima_os_nao_se_repete(self):
         ultimo = self.chamado_outro.pk
         self.client.post(self.url, {"chamados": [ultimo], "confirmar": "1"})
