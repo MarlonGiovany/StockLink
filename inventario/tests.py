@@ -1821,6 +1821,27 @@ class AplicarPerfisTests(BaseComPerfis):
         self.user.refresh_from_db()
         self.assertTrue(self.user.is_superuser)
 
+    def test_superusuario_escolhido_fica_e_ganha_contratos(self):
+        self.roda(
+            "--superusuario", "Pedrorios1", "--contratos", "Pedrorios1",
+            "--confirmar",
+        )
+        self.recepcao.refresh_from_db()
+        self.assertTrue(self.recepcao.is_superuser and self.recepcao.is_staff)
+        self.client.force_login(self.recepcao)
+        for rota in ("contrato_lista", "cliente_novo", "fornecedor_novo", "chamado_novo"):
+            self.assertEqual(self.client.get(reverse(rota)).status_code, 200, rota)
+        # ...mas não dá permissão a ninguém
+        self.assertEqual(self.client.get(reverse("permissoes_usuarios")).status_code, 403)
+        self.assertEqual(
+            self.client.get(reverse("admin:auth_user_changelist")).status_code, 403
+        )
+
+    def test_rodar_de_novo_nao_muda_nada(self):
+        args = ("--superusuario", "Pedrorios1", "--contratos", "Pedrorios1")
+        self.roda(*args, "--confirmar")
+        self.assertIn("0 usuário(s) mudariam", self.roda(*args))
+
     def test_login_inexistente_para_tudo(self):
         from django.core.management.base import CommandError
 
