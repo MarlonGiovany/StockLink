@@ -1750,6 +1750,20 @@ class RecepcaoTests(BaseComPerfis):
         super().setUp()
         self.client.force_login(self.recepcao)
 
+    def test_tem_tudo_do_cargo_menos_dar_permissoes(self):
+        for rota in ("contrato_lista", "cliente_novo", "fornecedor_novo",
+                     "equipamento_novo", "chamado_novo"):
+            self.assertEqual(self.client.get(reverse(rota)).status_code, 200, rota)
+        maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        resposta = self.client.post(reverse("equipamento_excluir", args=[maquina.pk]))
+        self.assertEqual(resposta.status_code, 302)
+        self.assertFalse(Equipamento.objects.filter(pk=maquina.pk).exists())
+        self.assertTrue(self.recepcao.has_perm("inventario.delete_cliente"))
+        self.assertTrue(self.recepcao.has_perm("inventario.delete_fornecedor"))
+        self.assertEqual(self.client.get(reverse("permissoes_usuarios")).status_code, 403)
+        # Não é superusuário: nem entra no /admin/
+        self.assertEqual(self.client.get(reverse("admin:index")).status_code, 302)
+
     def test_abre_chamado_e_ve_todas_as_os(self):
         self.assertEqual(self.client.get(reverse("chamado_novo")).status_code, 200)
         lista = self.client.get(reverse("chamado_lista"), {"status": ""})

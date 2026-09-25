@@ -13,8 +13,13 @@ Perfis
 
 * **Superusuário** — só quem o Analista escolher. Faz tudo nas telas, mas
   não mexe em usuários nem em permissões.
-* **Recepção** e **Usuário comum** — grupos com as permissões de cada um
-  (ver a migração 0018). Não precisam ser superusuários para trabalhar.
+* **Recepção** — o cargo da recepção: tudo no sistema, inclusive Contratos
+  e PDFs, menos dar permissões.
+* **Usuário comum** — cadastra equipamento, registra manutenção e cuida só
+  das OS dele.
+
+Recepção e Usuário comum são grupos (ver a migração 0018) e não precisam ser
+superusuários para trabalhar.
 
 Áreas restritas
 ---------------
@@ -48,7 +53,8 @@ PERFIS = [
     ("comum", GRUPO_COMUM,
      "Cadastra equipamento e registra manutenção; vê e encerra só as OS dele."),
     ("recepcao", GRUPO_RECEPCAO,
-     "Tudo do usuário comum, mais abrir chamado e ver todas as OS."),
+     "Tudo no sistema — clientes, fornecedores, equipamentos, chamados, "
+     "contratos e PDFs, inclusive excluir —, menos dar permissões."),
     ("super", "Superusuário",
      "Faz tudo nas telas e entra no /admin/, mas não mexe em usuários e permissões."),
 ]

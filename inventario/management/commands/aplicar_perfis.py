@@ -7,10 +7,8 @@ em --contratos ganha a aba Contratos e os PDFs. Depois disso, quem decide
 perfil é o Analista, na tela "Usuários e permissões".
 
 Uso:
-    python manage.py aplicar_perfis --superusuario Pedrorios1 --contratos Pedrorios1
-        (só mostra)
-    python manage.py aplicar_perfis --superusuario Pedrorios1 --contratos Pedrorios1 --confirmar
-        (aplica)
+    python manage.py aplicar_perfis --recepcao Pedrorios1              # só mostra
+    python manage.py aplicar_perfis --recepcao Pedrorios1 --confirmar  # aplica
 
 Sem --confirmar nada é gravado: o comando só lista o que faria.
 """

@@ -3,8 +3,11 @@
 * **Usuário comum** — cadastra equipamento e registra manutenção; vê e
   encerra só as ordens de serviço designadas a ele. Não cadastra cliente nem
   fornecedor e não exclui nada.
-* **Recepção** — tudo do usuário comum, mais abrir chamado (o que também
-  libera ver todas as OS; ver `ve_todos_os_chamados`).
+* **Recepção** — todas as permissões do sistema: cadastra e exclui
+  clientes, fornecedores e equipamentos, abre chamado e vê todas as OS
+  (`ve_todos_os_chamados`), e enxerga Contratos e PDFs. Só não mexe em
+  usuários nem em permissões — isso é do Analista, e não é permissão de
+  grupo.
 
 O antigo grupo "Operador" vira o "Usuário comum" (quem estava nele continua
 nele), já com as permissões novas.
@@ -24,7 +27,8 @@ COMUM = [
     "view_locacao", "view_movimentacao",
     "view_chamado", "change_chamado",
 ]
-RECEPCAO = COMUM + ["add_chamado"]
+# Recepção: todas as permissões do app inventario (None = todas)
+RECEPCAO = None
 
 
 def cria_grupos(apps, schema_editor):
@@ -45,9 +49,10 @@ def cria_grupos(apps, schema_editor):
 
     for nome, codenames in (("Usuário comum", COMUM), ("Recepção", RECEPCAO)):
         grupo, _ = Group.objects.get_or_create(name=nome)
-        grupo.permissions.set(Permission.objects.filter(
-            content_type__app_label="inventario", codename__in=codenames,
-        ))
+        permissoes = Permission.objects.filter(content_type__app_label="inventario")
+        if codenames is not None:
+            permissoes = permissoes.filter(codename__in=codenames)
+        grupo.permissions.set(permissoes)
 
 
 def desfaz(apps, schema_editor):
