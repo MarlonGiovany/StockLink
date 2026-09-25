@@ -2101,3 +2101,79 @@ class ContagemDeMaquinasPorClienteTests(BaseLogada):
         Cliente.objects.create(nome="PADARIA")
         resposta = self.client.get(reverse("cliente_lista"), {"q": "funda"})
         self.assertEqual([c.nome for c in resposta.context["clientes"]], ["FUNDAÇÃO TESTE"])
+
+
+class ImportarMaquinasTests(BaseLogada):
+    """Máquinas de um cliente em lote: cadastradas e já locadas para ele."""
+
+    CABECALHO = "inf;produto;marca;modelo;serie;local\n"
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="FUNDAÇÃO BAHIANA")
+        self.pasta = tempfile.mkdtemp()
+
+    def csv(self, *linhas):
+        caminho = os.path.join(self.pasta, "maquinas.csv")
+        with open(caminho, "w", encoding="utf-8") as f:
+            f.write(self.CABECALHO + "\n".join(linhas) + "\n")
+        return caminho
+
+    def roda(self, caminho, *extra):
+        saida = io.StringIO()
+        call_command("importar_maquinas", caminho, "--cliente", str(self.cliente.pk),
+                     *extra, stdout=saida)
+        return saida.getvalue()
+
+    def test_sem_confirmar_nao_grava(self):
+        caminho = self.csv("2755;Impressora;PANTUM;P3010DW;CP2LV00027;Comando")
+        self.assertIn("Nada foi gravado", self.roda(caminho))
+        self.assertFalse(Equipamento.objects.filter(numero_patrimonio="2755").exists())
+
+    def test_confirmar_cadastra_locada_para_o_cliente(self):
+        caminho = self.csv(
+            "2755;Impressora;PANTUM;P3010DW;CP2LV00027;Comando",
+            "3472;Impressora;EPSON;L6270;X8G6067601;GERENTE UTI",
+        )
+        self.roda(caminho, "--confirmar")
+        eq = Equipamento.objects.get(numero_patrimonio="2755")
+        self.assertEqual((eq.marca, eq.modelo, eq.numero_serie, eq.local, eq.produto.nome),
+                         ("PANTUM", "P3010DW", "CP2LV00027", "Comando", "Impressora"))
+        self.assertEqual(eq.status, Equipamento.Status.LOCADO)
+        locacao = eq.locacoes.get()
+        self.assertTrue(locacao.ativa)
+        self.assertEqual(locacao.cliente, self.cliente)
+        self.assertEqual(locacao.valor, Decimal("0"))
+        self.assertEqual(locacao.data_inicio, timezone.localdate())
+        self.assertIsNone(locacao.contrato)
+        self.assertEqual(
+            sorted(eq.movimentacoes.values_list("tipo", flat=True)),
+            [Movimentacao.Tipo.CADASTRO, Movimentacao.Tipo.LOCACAO],
+        )
+        self.assertEqual(self.cliente.locacoes.filter(ativa=True).count(), 2)
+
+    def test_inf_que_ja_existe_barra_tudo(self):
+        caminho = self.csv(
+            "2755;Impressora;PANTUM;P3010DW;CP2LV00027;Comando",
+            "1001;Impressora;PANTUM;P3010DW;OUTRA;UTI",      # 1001 vem de BaseLogada
+        )
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            self.roda(caminho, "--confirmar")
+        self.assertFalse(Equipamento.objects.filter(numero_patrimonio="2755").exists())
+
+    def test_linha_sem_inf_barra_tudo(self):
+        caminho = self.csv(
+            "2755;Impressora;PANTUM;P3010DW;CP2LV00027;Comando",
+            ";Impressora;PANTUM;P3010DW;CP2LV001HM;Enfermagem",
+        )
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            self.roda(caminho, "--confirmar")
+        self.assertFalse(Equipamento.objects.filter(numero_patrimonio="2755").exists())
+
+    def test_produto_inexistente_barra_tudo(self):
+        caminho = self.csv("2755;Multifuncional;PANTUM;M7310DW;X;UTI")
+        from django.core.management.base import CommandError
+        with self.assertRaises(CommandError):
+            self.roda(caminho, "--confirmar")
