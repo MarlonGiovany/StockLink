@@ -1233,8 +1233,11 @@ def chamado_excluir(request):
 
     Primeiro mostra a lista do que vai sumir; só apaga depois do "Sim,
     excluir". Chamado em aberto nunca entra, mesmo que o id venha no POST.
-    O número das OS novas continua de onde parou: o SQLite não reaproveita
-    id de linha apagada.
+    O número das OS novas continua de onde parou (o SQLite não reaproveita
+    id de linha apagada) — a menos que a exclusão apague **todos** os
+    chamados e o Analista marque "recomeçar": aí a próxima OS volta a ser a
+    0001. Só nesse caso, para nunca sair uma OS com o número de outra que
+    ainda existe.
     """
     if request.method != "POST":
         return redirect(f"{reverse('chamado_lista')}?status=ENCERRADO")
@@ -1249,23 +1252,50 @@ def chamado_excluir(request):
         messages.info(request, "Marque ao menos um chamado encerrado para excluir.")
         return redirect(voltar)
 
+    apaga_todos = not Chamado.objects.exclude(
+        pk__in=[c.pk for c in chamados]
+    ).exists()
+
     if "confirmar" in request.POST:
         numeros = ", ".join(c.numero_os for c in chamados)
+        recomecou = False
         with transaction.atomic():
             for chamado in chamados:
                 if chamado.arquivo_os:
                     chamado.arquivo_os.delete(save=False)
                 chamado.delete()
-        messages.success(
-            request,
-            f"{len(chamados)} chamado(s) excluído(s): OS {numeros}.",
-        )
+            # Confere de novo aqui dentro: alguém pode ter aberto um chamado
+            # entre a tela de confirmação e o clique.
+            if "recomecar" in request.POST and not Chamado.objects.exists():
+                _recomeca_numeracao_das_os()
+                recomecou = True
+        mensagem = f"{len(chamados)} chamado(s) excluído(s): OS {numeros}."
+        if recomecou:
+            mensagem += " A próxima OS será a 0001."
+        messages.success(request, mensagem)
         return redirect(voltar)
 
     return render(
         request, "inventario/chamado_excluir.html",
-        {"chamados": chamados, "voltar": voltar},
+        {"chamados": chamados, "voltar": voltar, "apaga_todos": apaga_todos},
     )
+
+
+def _recomeca_numeracao_das_os():
+    """Zera o contador de id dos chamados (a OS é o id: 0001, 0002...).
+
+    Usa o SQL que o próprio Django gera para o banco em uso — SQLite hoje,
+    PostgreSQL se um dia mudar. Só pode rodar com a tabela vazia.
+    """
+    from django.core.management.color import no_style
+    from django.db import connection
+
+    comandos = connection.ops.sequence_reset_by_name_sql(
+        no_style(), [{"table": Chamado._meta.db_table, "column": "id"}]
+    )
+    with connection.cursor() as cursor:
+        for sql in comandos:
+            cursor.execute(sql)
 
 
 @login_required
