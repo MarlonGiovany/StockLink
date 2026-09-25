@@ -1098,7 +1098,7 @@ def permissoes_usuarios(request):
 def _chamados_visiveis(user):
     """Os chamados que o usuário pode ver fora do painel.
 
-    Usuário comum: só as OS designadas a ele. Recepção e superusuário: todas
+    Técnico: só as OS designadas a ele. Recepção e superusuário: todas
     (ver `ve_todos_os_chamados`).
     """
     chamados = Chamado.objects.all()

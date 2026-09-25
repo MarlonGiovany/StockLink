@@ -1,6 +1,6 @@
 """Cria os grupos dos perfis que não são superusuário.
 
-* **Usuário comum** — cadastra equipamento e registra manutenção; vê e
+* **Técnico** — cadastra equipamento e registra manutenção; vê e
   encerra só as ordens de serviço designadas a ele. Não cadastra cliente nem
   fornecedor e não exclui nada.
 * **Recepção** — todas as permissões do sistema: cadastra e exclui
@@ -9,7 +9,7 @@
   usuários nem em permissões — isso é do Analista, e não é permissão de
   grupo.
 
-O antigo grupo "Operador" vira o "Usuário comum" (quem estava nele continua
+O antigo grupo "Operador" vira o "Técnico" (quem estava nele continua
 nele), já com as permissões novas.
 
 O Analista pode ajustar as permissões de cada grupo depois, em /admin/ →
@@ -19,7 +19,7 @@ Grupos. Rodar a migração de novo não desfaz o ajuste: ela só roda uma vez.
 from django.contrib.auth.management import create_permissions
 from django.db import migrations
 
-COMUM = [
+TECNICO = [
     "view_equipamento", "add_equipamento",
     "view_produto", "add_produto",
     "view_manutencao", "add_manutencao",
@@ -43,11 +43,11 @@ def cria_grupos(apps, schema_editor):
     Permission = apps.get_model("auth", "Permission")
 
     operador = Group.objects.filter(name="Operador").first()
-    if operador and not Group.objects.filter(name="Usuário comum").exists():
-        operador.name = "Usuário comum"
+    if operador and not Group.objects.filter(name="Técnico").exists():
+        operador.name = "Técnico"
         operador.save()
 
-    for nome, codenames in (("Usuário comum", COMUM), ("Recepção", RECEPCAO)):
+    for nome, codenames in (("Técnico", TECNICO), ("Recepção", RECEPCAO)):
         grupo, _ = Group.objects.get_or_create(name=nome)
         permissoes = Permission.objects.filter(content_type__app_label="inventario")
         if codenames is not None:
@@ -58,7 +58,7 @@ def cria_grupos(apps, schema_editor):
 def desfaz(apps, schema_editor):
     Group = apps.get_model("auth", "Group")
     Group.objects.filter(name="Recepção").delete()
-    Group.objects.filter(name="Usuário comum").update(name="Operador")
+    Group.objects.filter(name="Técnico").update(name="Operador")
 
 
 class Migration(migrations.Migration):

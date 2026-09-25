@@ -7,7 +7,7 @@ Perfis
   (o ``admin`` do Márlon). É o único que:
 
   - abre a tela "Usuários e permissões";
-  - escolhe o perfil de cada pessoa (Usuário comum, Recepção, Superusuário);
+  - escolhe o perfil de cada pessoa (Técnico, Recepção, Superusuário);
   - libera as áreas restritas (aba Contratos e PDFs);
   - cria e edita usuários e grupos no ``/admin/``.
 
@@ -15,10 +15,10 @@ Perfis
   não mexe em usuários nem em permissões.
 * **Recepção** — o cargo da recepção: tudo no sistema, inclusive Contratos
   e PDFs, menos dar permissões.
-* **Usuário comum** — cadastra equipamento, registra manutenção e cuida só
+* **Técnico** — cadastra equipamento, registra manutenção e cuida só
   das OS dele.
 
-Recepção e Usuário comum são grupos (ver a migração 0018) e não precisam ser
+Recepção e Técnico são grupos (ver a migração 0018) e não precisam ser
 superusuários para trabalhar.
 
 Áreas restritas
@@ -45,12 +45,12 @@ VER_CONTRATOS = "ver_contratos"
 VER_PDFS = "ver_pdfs"
 
 # Grupos dos perfis que não são superusuário (criados na migração 0018)
-GRUPO_COMUM = "Usuário comum"
+GRUPO_TECNICO = "Técnico"
 GRUPO_RECEPCAO = "Recepção"
 
 # Perfis que o Analista escolhe na tela de permissões: (código, nome, ajuda)
 PERFIS = [
-    ("comum", GRUPO_COMUM,
+    ("tecnico", GRUPO_TECNICO,
      "Cadastra equipamento e registra manutenção; vê e encerra só as OS dele."),
     ("recepcao", GRUPO_RECEPCAO,
      "Tudo no sistema — clientes, fornecedores, equipamentos, chamados, "
@@ -86,7 +86,7 @@ def eh_analista(user):
 def ve_todos_os_chamados(user):
     """Quem abre chamado (Recepção) e os superusuários veem todos.
 
-    O Usuário comum só vê as ordens de serviço designadas a ele — na lista,
+    O Técnico só vê as ordens de serviço designadas a ele — na lista,
     na ficha, na impressão, no anexo e no histórico. O painel da área técnica
     não passa por aqui: ele continua mostrando todos os chamados para todos.
     """
@@ -101,19 +101,19 @@ def perfil_do_usuario(usuario, grupos):
         return "super"
     if GRUPO_RECEPCAO in grupos:
         return "recepcao"
-    if GRUPO_COMUM in grupos:
-        return "comum"
+    if GRUPO_TECNICO in grupos:
+        return "tecnico"
     return ""
 
 
 def aplica_perfil(usuario, perfil):
     """Grava o perfil: superusuário ou um dos dois grupos, nunca os dois."""
     grupos = {g.name: g for g in Group.objects.filter(
-        name__in=[GRUPO_COMUM, GRUPO_RECEPCAO]
+        name__in=[GRUPO_TECNICO, GRUPO_RECEPCAO]
     )}
     usuario.groups.remove(*grupos.values())
-    if perfil == "comum" and GRUPO_COMUM in grupos:
-        usuario.groups.add(grupos[GRUPO_COMUM])
+    if perfil == "tecnico" and GRUPO_TECNICO in grupos:
+        usuario.groups.add(grupos[GRUPO_TECNICO])
     elif perfil == "recepcao" and GRUPO_RECEPCAO in grupos:
         usuario.groups.add(grupos[GRUPO_RECEPCAO])
     # is_staff junto: sem ele o superusuário não entra no /admin/

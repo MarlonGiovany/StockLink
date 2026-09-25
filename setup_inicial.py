@@ -16,11 +16,11 @@ if not User.objects.filter(username="admin").exists():
 else:
     print("Superusuario 'admin' ja existe")
 
-# Grupos dos perfis ("Usuário comum" e "Recepção") vêm da migração 0018.
+# Grupos dos perfis ("Técnico" e "Recepção") vêm da migração 0018.
 # O login "admin" é o Analista (settings.USUARIO_ANALISTA).
-grupo = Group.objects.get(name="Usuário comum")
+grupo = Group.objects.get(name="Técnico")
 
-# Usuario comum de exemplo
+# Técnico de exemplo
 if not User.objects.filter(username="operador").exists():
     operador_senha = os.environ.get("OPERADOR_SENHA") or getpass("Senha do operador: ")
     u = User.objects.create_user("operador", password=operador_senha)

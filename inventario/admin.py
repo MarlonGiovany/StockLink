@@ -27,7 +27,7 @@ admin.site.site_title = "StockLink"
 admin.site.index_title = "Painel de administração"
 
 
-# Usuários e grupos: só o Analista vê e mexe. Um superusuário comum entra no
+# Usuários e grupos: só o Analista vê e mexe. Um superusuário que não é o Analista entra no
 # /admin/ para cuidar dos dados, mas não consegue se dar (nem dar a ninguém)
 # permissão, perfil ou superusuário — isso é do Analista.
 class SoAnalistaMixin:

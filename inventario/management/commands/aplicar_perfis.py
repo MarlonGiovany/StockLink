@@ -1,7 +1,7 @@
 """Passa todo mundo (menos o Analista) para os perfis novos — uma vez só.
 
 Tira o superusuário de todos, menos do Analista e de quem vier em
---superusuario, e coloca os demais no grupo "Usuário comum" — ou em
+--superusuario, e coloca os demais no grupo "Técnico" — ou em
 "Recepção", para quem vier em --recepcao ou já estiver nesse grupo. Quem vier
 em --contratos ganha a aba Contratos e os PDFs. Depois disso, quem decide
 perfil é o Analista, na tela "Usuários e permissões".
@@ -20,7 +20,7 @@ from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
 from inventario.permissoes import (
-    GRUPO_COMUM,
+    GRUPO_TECNICO,
     GRUPO_RECEPCAO,
     PERFIS,
     VER_CONTRATOS,
@@ -62,7 +62,7 @@ class Command(BaseCommand):
                 f"inativo — sem ele ninguém conseguiria dar permissões. Nada foi "
                 f"alterado."
             )
-        if not Group.objects.filter(name__in=[GRUPO_COMUM, GRUPO_RECEPCAO]).count() == 2:
+        if not Group.objects.filter(name__in=[GRUPO_TECNICO, GRUPO_RECEPCAO]).count() == 2:
             raise CommandError("Rode as migrações antes (python manage.py migrate).")
         citados = set(recepcao) | set(superusuario) | set(contratos)
         faltando = citados - set(
@@ -87,7 +87,7 @@ class Command(BaseCommand):
             elif usuario.username in recepcao or GRUPO_RECEPCAO in grupos:
                 novo = "recepcao"
             else:
-                novo = "comum"
+                novo = "tecnico"
             libera = usuario.username in contratos and not all(
                 a in usuario.user_permissions.all() for a in areas
             )

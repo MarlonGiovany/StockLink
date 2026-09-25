@@ -1586,7 +1586,7 @@ class EdicaoDeAditivoTests(BaseLogada):
 
 
 class BaseComPerfis(BaseComChamado):
-    """O Analista ("admin", de BaseLogada) mais um técnico comum, a recepção
+    """O Analista ("admin", de BaseLogada) mais um técnico, a recepção
     e um superusuário que não é o Analista."""
 
     def setUp(self):
@@ -1595,7 +1595,7 @@ class BaseComPerfis(BaseComChamado):
         super().setUp()
         User = get_user_model()
         self.tecnico = User.objects.create_user("tecnico", password="x")
-        self.tecnico.groups.add(Group.objects.get(name="Usuário comum"))
+        self.tecnico.groups.add(Group.objects.get(name="Técnico"))
         self.recepcao = User.objects.create_user("Pedrorios1", password="x")
         self.recepcao.groups.add(Group.objects.get(name="Recepção"))
         self.outro_super = User.objects.create_superuser("chefe", password="x")
@@ -1648,17 +1648,17 @@ class AnalistaTests(BaseComPerfis):
         grupos = self.perfil(self.tecnico, "super")
         self.assertTrue(self.tecnico.is_superuser and self.tecnico.is_staff)
         self.assertEqual(grupos, set())
-        grupos = self.perfil(self.tecnico, "comum")
+        grupos = self.perfil(self.tecnico, "tecnico")
         self.assertFalse(self.tecnico.is_superuser or self.tecnico.is_staff)
-        self.assertEqual(grupos, {"Usuário comum"})
+        self.assertEqual(grupos, {"Técnico"})
 
-    def test_analista_troca_comum_por_recepcao(self):
+    def test_analista_troca_tecnico_por_recepcao(self):
         self.assertEqual(self.perfil(self.tecnico, "recepcao"), {"Recepção"})
 
     def test_analista_libera_contratos(self):
         self.client.post(
             reverse("permissoes_usuarios"),
-            {f"perfil_{self.tecnico.pk}": "comum",
+            {f"perfil_{self.tecnico.pk}": "tecnico",
              f"ver_contratos_{self.tecnico.pk}": "on"},
         )
         self.client.force_login(self.tecnico)
@@ -1670,7 +1670,7 @@ class AnalistaTests(BaseComPerfis):
 
 
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
-class UsuarioComumTests(BaseComPerfis):
+class TecnicoTests(BaseComPerfis):
     """Cadastra equipamento e manutenção; vê e encerra só as OS dele."""
 
     def setUp(self):
@@ -1737,7 +1737,7 @@ class UsuarioComumTests(BaseComPerfis):
         from django.contrib.auth.models import Group
 
         codenames = set(
-            Group.objects.get(name="Usuário comum")
+            Group.objects.get(name="Técnico")
             .permissions.values_list("codename", flat=True)
         )
         self.assertFalse({c for c in codenames if c.startswith("delete_")})
@@ -1828,7 +1828,7 @@ class AplicarPerfisTests(BaseComPerfis):
         self.outro_super.refresh_from_db()
         self.assertFalse(self.outro_super.is_superuser or self.outro_super.is_staff)
         self.assertEqual(
-            [g.name for g in self.outro_super.groups.all()], ["Usuário comum"]
+            [g.name for g in self.outro_super.groups.all()], ["Técnico"]
         )
         self.assertEqual([g.name for g in self.tecnico.groups.all()], ["Recepção"])
         self.assertEqual([g.name for g in self.recepcao.groups.all()], ["Recepção"])
