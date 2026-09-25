@@ -26,6 +26,7 @@ from inventario.permissoes import (
     VER_CONTRATOS,
     VER_PDFS,
     aplica_perfil,
+    diretas_fora_das_areas,
     perfil_do_usuario,
 )
 
@@ -91,11 +92,17 @@ class Command(BaseCommand):
             libera = usuario.username in contratos and not all(
                 a in usuario.user_permissions.all() for a in areas
             )
+            limpa = len(diretas_fora_das_areas(usuario))
             marca = "" if usuario.is_active else "  (inativo)"
+            if limpa:
+                marca += f"  - {limpa} permissões diretas"
             if libera:
                 marca += "  + contratos e PDFs"
             # is_staff sobrando (o antigo "administrador") também sai
-            muda = atual != novo or (usuario.is_staff and novo != "super") or libera
+            muda = (
+                atual != novo or (usuario.is_staff and novo != "super")
+                or libera or limpa
+            )
             seta = "" if muda else "  (sem mudança)"
             self.stdout.write(
                 f"  {usuario.username:<20} {NOMES[atual]:<16} -> {NOMES[novo]}{seta}{marca}"

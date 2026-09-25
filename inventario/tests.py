@@ -13,6 +13,7 @@ from datetime import timedelta
 from decimal import Decimal
 from unittest import mock
 
+from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -75,10 +76,10 @@ class ClassificacaoTests(TestCase):
 
 class BaseLogada(TestCase):
     def setUp(self):
-        # O login "admin" é o Analista (settings.USUARIO_ANALISTA): enxerga
+        # O login do Analista (settings.USUARIO_ANALISTA) enxerga
         # contratos e PDFs sem precisar de permissão marcada.
         self.user = get_user_model().objects.create_superuser(
-            "admin", "teste@exemplo.com", "senha-de-teste"
+            settings.USUARIO_ANALISTA, "teste@exemplo.com", "senha-de-teste"
         )
         self.client.force_login(self.user)
 
@@ -1586,7 +1587,7 @@ class EdicaoDeAditivoTests(BaseLogada):
 
 
 class BaseComPerfis(BaseComChamado):
-    """O Analista ("admin", de BaseLogada) mais um técnico, a recepção
+    """O Analista (de BaseLogada) mais um técnico, a recepção
     e um superusuário que não é o Analista."""
 
     def setUp(self):
@@ -1855,6 +1856,23 @@ class AplicarPerfisTests(BaseComPerfis):
         args = ("--superusuario", "Pedrorios1", "--contratos", "Pedrorios1")
         self.roda(*args, "--confirmar")
         self.assertIn("0 usuário(s) mudariam", self.roda(*args))
+
+    def test_limpa_permissoes_diretas_mas_mantem_contratos(self):
+        from django.contrib.auth.models import Permission
+
+        diretas = Permission.objects.filter(
+            content_type__app_label="inventario",
+            codename__in=["add_cliente", "delete_equipamento", "ver_contratos"],
+        )
+        self.tecnico.user_permissions.add(*diretas)
+        self.assertIn("2 permissões diretas", self.roda())
+        self.roda("--confirmar")
+        tecnico = get_user_model().objects.get(pk=self.tecnico.pk)
+        self.assertFalse(tecnico.has_perm("inventario.add_cliente"))
+        self.assertFalse(tecnico.has_perm("inventario.delete_equipamento"))
+        self.assertEqual(
+            [p.codename for p in tecnico.user_permissions.all()], ["ver_contratos"]
+        )
 
     def test_login_inexistente_para_tudo(self):
         from django.core.management.base import CommandError

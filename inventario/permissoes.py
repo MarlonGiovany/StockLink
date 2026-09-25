@@ -4,7 +4,7 @@ Perfis
 ------
 
 * **Analista** — o usuário configurado em ``settings.USUARIO_ANALISTA``
-  (o ``admin`` do Márlon). É o único que:
+  (o ``Admin`` do Márlon). É o único que:
 
   - abre a tela "Usuários e permissões";
   - escolhe o perfil de cada pessoa (Técnico, Recepção, Superusuário);
@@ -107,7 +107,16 @@ def perfil_do_usuario(usuario, grupos):
 
 
 def aplica_perfil(usuario, perfil):
-    """Grava o perfil: superusuário ou um dos dois grupos, nunca os dois."""
+    """Grava o perfil: superusuário ou um dos dois grupos, nunca os dois.
+
+    Também limpa as permissões marcadas direto na conta — senão elas
+    continuariam valendo por cima do perfil (um técnico com "add_cliente"
+    direto seguiria cadastrando cliente). Ficam só as áreas restritas
+    (Contratos e PDFs), que o Analista libera pessoa por pessoa.
+    """
+    extras = diretas_fora_das_areas(usuario)
+    if extras:
+        usuario.user_permissions.remove(*extras)
     grupos = {g.name: g for g in Group.objects.filter(
         name__in=[GRUPO_TECNICO, GRUPO_RECEPCAO]
     )}
@@ -121,6 +130,15 @@ def aplica_perfil(usuario, perfil):
     if usuario.is_superuser != super_ or usuario.is_staff != super_:
         usuario.is_superuser = usuario.is_staff = super_
         usuario.save(update_fields=["is_superuser", "is_staff"])
+
+
+def diretas_fora_das_areas(usuario):
+    """Permissões marcadas direto na conta que não são Contratos/PDFs."""
+    return [
+        p for p in usuario.user_permissions.all()
+        if not (p.content_type.app_label == "inventario"
+                and p.codename in (VER_CONTRATOS, VER_PDFS))
+    ]
 
 
 def tem_area(user, codename):
