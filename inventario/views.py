@@ -1094,6 +1094,43 @@ def permissoes_usuarios(request):
     )
 
 
+@login_required
+@exige_analista
+def usuario_trocar_senha(request, pk):
+    """O Analista define uma senha nova para quem esqueceu a sua.
+
+    Usa o formulário padrão do Django: senha nova duas vezes e as mesmas
+    regras de senha do sistema (tamanho mínimo, não pode ser comum, etc.).
+    Trocar a senha desconecta a pessoa de onde ela estiver logada.
+
+    A senha do próprio Analista não passa por aqui — ele troca a dele em
+    /admin/, como sempre.
+    """
+    from django.contrib.auth.forms import SetPasswordForm
+
+    usuario = get_object_or_404(get_user_model(), pk=pk)
+    if usuario.pk == usuario_analista().pk:
+        raise Http404
+    if request.method == "POST":
+        form = SetPasswordForm(usuario, request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request,
+                f"Senha de {usuario.get_username()} alterada. Passe a senha "
+                f"nova para a pessoa — ela vai precisar entrar de novo.",
+            )
+            return redirect("permissoes_usuarios")
+    else:
+        form = SetPasswordForm(usuario)
+    for campo in form.fields.values():
+        campo.widget.attrs.update({"class": "form-control", "autocomplete": "new-password"})
+    return render(
+        request, "inventario/usuario_trocar_senha.html",
+        {"usuario": usuario, "form": form},
+    )
+
+
 # ----- Chamados e Ordem de Serviço -----
 
 def _chamados_visiveis(user):

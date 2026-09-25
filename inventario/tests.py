@@ -1671,6 +1671,55 @@ class AnalistaTests(BaseComPerfis):
         self.assertEqual(self.client.get(reverse("permissoes_usuarios")).status_code, 403)
 
 
+class TrocaDeSenhaPeloAnalistaTests(BaseComPerfis):
+    """O Analista define uma senha nova para quem esqueceu a sua."""
+
+    SENHA = "Nova-senha-2026!"
+
+    def troca(self, usuario, senha1=SENHA, senha2=SENHA):
+        return self.client.post(
+            reverse("usuario_trocar_senha", args=[usuario.pk]),
+            {"new_password1": senha1, "new_password2": senha2},
+        )
+
+    def test_analista_troca_a_senha_e_a_pessoa_entra_com_ela(self):
+        resposta = self.troca(self.tecnico)
+        self.assertRedirects(resposta, reverse("permissoes_usuarios"))
+        self.tecnico.refresh_from_db()
+        self.assertTrue(self.tecnico.check_password(self.SENHA))
+        self.assertTrue(self.client.login(username="tecnico", password=self.SENHA))
+
+    def test_senhas_diferentes_ou_fracas_sao_recusadas(self):
+        for s1, s2 in ((self.SENHA, "outra-coisa-2026"), ("123", "123")):
+            resposta = self.troca(self.tecnico, s1, s2)
+            self.assertEqual(resposta.status_code, 200)
+            self.assertTrue(resposta.context["form"].errors)
+        self.tecnico.refresh_from_db()
+        self.assertFalse(self.tecnico.check_password(self.SENHA))
+
+    def test_trocar_a_senha_desconecta_a_pessoa(self):
+        from django.test import Client
+
+        do_tecnico = Client()
+        do_tecnico.force_login(self.tecnico)
+        self.assertEqual(do_tecnico.get(reverse("chamado_lista")).status_code, 200)
+        self.troca(self.tecnico)
+        self.assertEqual(do_tecnico.get(reverse("chamado_lista")).status_code, 302)
+
+    def test_so_o_analista_troca_senha(self):
+        for usuario in (self.outro_super, self.recepcao, self.tecnico):
+            self.client.force_login(usuario)
+            resposta = self.troca(self.outro_super if usuario != self.outro_super else self.tecnico)
+            self.assertEqual(resposta.status_code, 403, usuario.username)
+
+    def test_senha_do_analista_nao_passa_por_aqui(self):
+        self.assertEqual(self.troca(self.user).status_code, 404)
+
+    def test_botao_aparece_na_tela_de_permissoes(self):
+        html = self.client.get(reverse("permissoes_usuarios")).content.decode()
+        self.assertIn(reverse("usuario_trocar_senha", args=[self.tecnico.pk]), html)
+
+
 @override_settings(MEDIA_ROOT=tempfile.mkdtemp())
 class TecnicoTests(BaseComPerfis):
     """Cadastra equipamento e manutenção; vê e encerra só as OS dele."""

@@ -38,6 +38,8 @@
               {% if linha.usuario.get_full_name %}
                 <div class="small text-muted">{{ linha.usuario.get_full_name }}</div>
               {% endif %}
+              <a href="{% url 'usuario_trocar_senha' linha.usuario.pk %}"
+                 class="btn btn-sm btn-outline-secondary mt-1 py-0">🔑 Trocar senha</a>
             </td>
             <td>
               <select name="perfil_{{ linha.usuario.pk }}" class="form-select form-select-sm">

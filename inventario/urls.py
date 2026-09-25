@@ -36,6 +36,8 @@ urlpatterns = [
     path("aditivo/<int:pk>/pdf/", views.aditivo_pdf, name="aditivo_pdf"),
 
     path("permissoes/", views.permissoes_usuarios, name="permissoes_usuarios"),
+    path("permissoes/<int:pk>/senha/", views.usuario_trocar_senha,
+         name="usuario_trocar_senha"),
 
     # Chamados / Ordem de Serviço
     path("chamados/", views.chamado_lista, name="chamado_lista"),
