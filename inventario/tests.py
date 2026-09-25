@@ -2055,3 +2055,49 @@ class ExclusaoDeChamadosTests(BaseComPerfis):
             tecnico=self.user, aberto_por=self.user,
         )
         self.assertGreater(novo.pk, ultimo)
+
+
+class ContagemDeMaquinasPorClienteTests(BaseLogada):
+    """A lista de clientes mostra quantas máquinas cada um tem locadas hoje."""
+
+    def test_conta_so_as_locacoes_ativas(self):
+        cliente = Cliente.objects.create(nome="FUNDAÇÃO TESTE")
+        vazio = Cliente.objects.create(nome="SEM MÁQUINA")
+        m1, m2, m3 = Equipamento.objects.order_by("numero_patrimonio")[:3]
+        for maquina, ativa in ((m1, True), (m2, True), (m3, False)):
+            Locacao.objects.create(
+                equipamento=maquina, cliente=cliente, valor="0",
+                data_inicio="2026-09-25", ativa=ativa,
+            )
+        resposta = self.client.get(reverse("cliente_lista"))
+        contagem = {c.nome: c.maquinas_ativas for c in resposta.context["clientes"]}
+        self.assertEqual(contagem["FUNDAÇÃO TESTE"], 2)
+        self.assertEqual(contagem["SEM MÁQUINA"], 0)
+        self.assertContains(resposta, "Máquinas locadas")
+
+    def test_numero_abre_as_maquinas_do_cliente(self):
+        cliente = Cliente.objects.create(nome="FUNDAÇÃO TESTE")
+        outro = Cliente.objects.create(nome="PADARIA")
+        m1, m2, m3 = Equipamento.objects.order_by("numero_patrimonio")[:3]
+        Locacao.objects.create(equipamento=m1, cliente=cliente, valor="0",
+                               data_inicio="2026-09-25", ativa=True)
+        Locacao.objects.create(equipamento=m2, cliente=cliente, valor="0",
+                               data_inicio="2026-01-01", ativa=False)   # devolvida
+        Locacao.objects.create(equipamento=m3, cliente=outro, valor="0",
+                               data_inicio="2026-09-25", ativa=True)
+        link = f'{reverse("equipamento_lista")}?cliente={cliente.pk}'
+        self.assertContains(self.client.get(reverse("cliente_lista")), link)
+        resposta = self.client.get(reverse("equipamento_lista"), {"cliente": cliente.pk})
+        self.assertEqual(list(resposta.context["equipamentos"]), [m1])
+        self.assertContains(resposta, "Máquinas locadas para FUNDAÇÃO TESTE")
+        # A busca dentro da tela continua presa ao cliente
+        resposta = self.client.get(
+            reverse("equipamento_lista"), {"cliente": cliente.pk, "q": m3.numero_patrimonio}
+        )
+        self.assertEqual(list(resposta.context["equipamentos"]), [])
+
+    def test_busca_continua_funcionando(self):
+        Cliente.objects.create(nome="FUNDAÇÃO TESTE")
+        Cliente.objects.create(nome="PADARIA")
+        resposta = self.client.get(reverse("cliente_lista"), {"q": "funda"})
+        self.assertEqual([c.nome for c in resposta.context["clientes"]], ["FUNDAÇÃO TESTE"])

@@ -75,9 +75,10 @@ def equipamento_lista(request):
     termo = request.GET.get("q", "").strip()
     status = request.GET.get("status", "").strip()
     produto_param = request.GET.get("produto", "").strip()
+    cliente_param = request.GET.get("cliente", "").strip()
 
     # Painel inicial: um botão por produto, com a quantidade de cada um
-    if not produto_param and not termo and not status:
+    if not produto_param and not termo and not status and not cliente_param:
         produtos = (
             Produto.objects.filter(ativo=True)
             .annotate(qtd=Count("equipamentos"))
@@ -113,6 +114,14 @@ def equipamento_lista(request):
     if status:
         equipamentos = equipamentos.filter(status=status)
 
+    # Vindo da lista de clientes: só as máquinas locadas hoje para o cliente
+    cliente_atual = None
+    if cliente_param:
+        cliente_atual = get_object_or_404(Cliente, pk=cliente_param)
+        equipamentos = equipamentos.filter(
+            locacoes__cliente=cliente_atual, locacoes__ativa=True
+        ).distinct()
+
     contexto = {
         "equipamentos": equipamentos,
         "termo": termo,
@@ -121,6 +130,7 @@ def equipamento_lista(request):
         "total": equipamentos.count(),
         "produto_atual": produto_atual,
         "produto_param": produto_param,
+        "cliente_atual": cliente_atual,
     }
     return render(request, "inventario/equipamento_lista.html", contexto)
 
@@ -488,9 +498,14 @@ def fornecedor_novo(request):
 
 @login_required
 def cliente_lista(request):
-    """Lista de clientes, com busca pelo nome."""
+    """Lista de clientes, com busca pelo nome e quantas máquinas cada um tem
+    locadas hoje (locações ativas)."""
     termo = request.GET.get("q", "").strip()
-    clientes = Cliente.objects.all()
+    clientes = Cliente.objects.annotate(
+        maquinas_ativas=Count(
+            "locacoes__equipamento", filter=Q(locacoes__ativa=True), distinct=True
+        )
+    )
     if termo:
         clientes = clientes.filter(nome__icontains=termo)
     return render(

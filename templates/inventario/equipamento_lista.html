@@ -3,12 +3,17 @@
 {% block conteudo %}
 
 <div class="mb-2">
-  <a href="{% url 'equipamento_lista' %}" class="text-decoration-none">&larr; Produtos</a>
+  {% if cliente_atual %}
+    <a href="{% url 'cliente_lista' %}" class="text-decoration-none">&larr; Clientes</a>
+  {% else %}
+    <a href="{% url 'equipamento_lista' %}" class="text-decoration-none">&larr; Produtos</a>
+  {% endif %}
 </div>
 
 <div class="d-flex justify-content-between align-items-center mb-3">
   <h4 class="mb-0">
-    {% if produto_atual %}{{ produto_atual.nome }}
+    {% if cliente_atual %}Máquinas locadas para {{ cliente_atual.nome }}
+    {% elif produto_atual %}{{ produto_atual.nome }}
     {% elif produto_param == "todos" %}Todos os equipamentos
     {% elif produto_param == "sem" %}Sem produto
     {% else %}Equipamentos{% endif %}
@@ -21,6 +26,7 @@
 
 <form method="get" class="row g-2 mb-3">
   <input type="hidden" name="produto" value="{{ produto_param }}">
+  {% if cliente_atual %}<input type="hidden" name="cliente" value="{{ cliente_atual.pk }}">{% endif %}
   <div class="col-md-7">
     <input type="text" name="q" value="{{ termo }}" class="form-control"
            placeholder="Buscar por marca, modelo, série, INF ou local...">
