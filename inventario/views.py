@@ -45,11 +45,15 @@ from .models import (
 )
 from .permissoes import (
     AREAS,
+    PERFIS,
     VER_CONTRATOS,
     VER_PDFS,
-    exige_admin,
+    aplica_perfil,
+    exige_analista,
     exige_area,
-    usuario_owner,
+    perfil_do_usuario,
+    usuario_analista,
+    ve_todos_os_chamados,
 )
 
 
@@ -1011,20 +1015,21 @@ def aditivo_pdf(request, pk):
     return _entregar_pdf(aditivo.arquivo)
 
 
-# ----- Usuários e permissões (só o owner) -----
+# ----- Usuários e permissões (só o Analista) -----
 
 @login_required
-@exige_admin
+@exige_analista
 def permissoes_usuarios(request):
-    """Tela onde o owner libera as áreas restritas para cada usuário.
+    """Tela onde o Analista escolhe o perfil de cada usuário e libera as
+    áreas restritas.
 
-    O owner não aparece na lista de propósito: ele enxerga tudo e não teria
+    O Analista não aparece na lista de propósito: ele enxerga tudo e não teria
     como se tirar do próprio acesso.
     """
-    owner = usuario_owner()
+    analista = usuario_analista()
     usuarios = (
         get_user_model().objects
-        .exclude(pk=owner.pk)
+        .exclude(pk=analista.pk)
         .prefetch_related("user_permissions", "groups__permissions")
         .order_by("username")
     )
@@ -1034,10 +1039,16 @@ def permissoes_usuarios(request):
         )
         for codigo, _, _ in AREAS
     }
+    codigos_perfil = {codigo for codigo, _, _ in PERFIS}
 
     if request.method == "POST":
         alterados = 0
         for usuario in usuarios:
+            grupos = {g.name for g in usuario.groups.all()}
+            perfil = request.POST.get(f"perfil_{usuario.pk}", "")
+            if perfil in codigos_perfil and perfil != perfil_do_usuario(usuario, grupos):
+                aplica_perfil(usuario, perfil)
+                alterados += 1
             for codigo, _, _ in AREAS:
                 marcado = f"{codigo}_{usuario.pk}" in request.POST
                 tinha = permissoes[codigo] in usuario.user_permissions.all()
@@ -1056,6 +1067,7 @@ def permissoes_usuarios(request):
     # Monta a tabela: uma linha por usuário, uma coluna por área
     linhas = []
     for usuario in usuarios:
+        grupos = {g.name for g in usuario.groups.all()}
         do_grupo = {
             p.codename
             for grupo in usuario.groups.all()
@@ -1064,6 +1076,7 @@ def permissoes_usuarios(request):
         diretas = {p.codename for p in usuario.user_permissions.all()}
         linhas.append({
             "usuario": usuario,
+            "perfil": perfil_do_usuario(usuario, grupos),
             "areas": [
                 {
                     "codigo": codigo,
@@ -1076,11 +1089,29 @@ def permissoes_usuarios(request):
 
     return render(
         request, "inventario/permissoes.html",
-        {"owner": owner, "linhas": linhas, "areas": AREAS},
+        {"analista": analista, "linhas": linhas, "areas": AREAS, "perfis": PERFIS},
     )
 
 
 # ----- Chamados e Ordem de Serviço -----
+
+def _chamados_visiveis(user):
+    """Os chamados que o usuário pode ver fora do painel.
+
+    Usuário comum: só as OS designadas a ele. Recepção e superusuário: todas
+    (ver `ve_todos_os_chamados`).
+    """
+    chamados = Chamado.objects.all()
+    if not ve_todos_os_chamados(user):
+        chamados = chamados.filter(tecnico=user)
+    return chamados
+
+
+def _confere_chamado_visivel(user, chamado):
+    """403 para quem abre a OS de outro técnico (o painel mostra todas)."""
+    if not ve_todos_os_chamados(user) and chamado.tecnico_id != user.pk:
+        raise PermissionDenied
+
 
 def _chamados_filtrados(request, status_padrao=None):
     """Aplica os filtros do painel de chamados e do histórico.
@@ -1105,7 +1136,7 @@ def _chamados_filtrados(request, status_padrao=None):
     de = request.GET.get("de", "").strip()
     ate = request.GET.get("ate", "").strip()
 
-    chamados = Chamado.objects.select_related(
+    chamados = _chamados_visiveis(request.user).select_related(
         "equipamento", "equipamento__produto", "tecnico", "cliente",
         "aberto_por", "encerrado_por",
     )
@@ -1151,11 +1182,12 @@ def chamado_lista(request):
     chamados, filtros = _chamados_filtrados(
         request, status_padrao=Chamado.Status.ABERTO
     )
+    visiveis = _chamados_visiveis(request.user)
     contexto = {
         "chamados": chamados,
         "total": chamados.count(),
-        "abertos": Chamado.objects.filter(status=Chamado.Status.ABERTO).count(),
-        "qtd_encerrados": Chamado.objects.filter(
+        "abertos": visiveis.filter(status=Chamado.Status.ABERTO).count(),
+        "qtd_encerrados": visiveis.filter(
             status=Chamado.Status.ENCERRADO
         ).count(),
     }
@@ -1203,6 +1235,7 @@ def chamado_detalhe(request, pk):
         ),
         pk=pk,
     )
+    _confere_chamado_visivel(request.user, chamado)
     pode_encerrar = request.user.has_perm("inventario.change_chamado")
 
     if request.method == "POST":
@@ -1365,6 +1398,7 @@ def chamado_imprimir(request, pk):
         ),
         pk=pk,
     )
+    _confere_chamado_visivel(request.user, chamado)
     return render(
         request, "inventario/chamado_imprimir.html", {"chamado": chamado}
     )
@@ -1378,6 +1412,7 @@ def chamado_arquivo(request, pk):
     está logado consiga abrir o comprovante assinado.
     """
     chamado = get_object_or_404(Chamado, pk=pk)
+    _confere_chamado_visivel(request.user, chamado)
     arquivo = chamado.arquivo_os
     if not arquivo:
         raise Http404("Nenhuma OS digitalizada anexada a este chamado.")

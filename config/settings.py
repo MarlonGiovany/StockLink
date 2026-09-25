@@ -219,6 +219,10 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 NOME_SISTEMA = 'INFORLINK'
 NOME_EMPRESA = 'INFORLINK INOVAÇÕES EM TECNOLOGIA'
 
+# Analista: o único usuário que define perfis e libera áreas restritas
+# (ver inventario/permissoes.py). É o login do Márlon.
+USUARIO_ANALISTA = 'admin'
+
 # Autenticação
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'equipamento_lista'

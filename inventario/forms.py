@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.core.files.uploadedfile import UploadedFile
 from django.urls import reverse
 
 from .models import (
@@ -34,6 +35,26 @@ def _formata_telefone(digitos):
     if len(digitos) == 11:
         return f"({digitos[0:2]}) {digitos[2:7]}-{digitos[7:11]}"
     return f"({digitos[0:2]}) {digitos[2:6]}-{digitos[6:10]}"
+
+
+# Tamanho máximo de cada arquivo enviado (PDF de contrato/aditivo, OS
+# digitalizada ou foto). A conta do servidor tem 512 MB no total; uma foto de
+# celular fica em 3 a 6 MB e um PDF escaneado em 1 a 2 MB.
+LIMITE_ARQUIVO_MB = 10
+
+
+def _valida_tamanho(arquivo):
+    # Só confere o que acabou de chegar: o arquivo que já estava salvo passa
+    # direto (e ler o tamanho dele quebraria se sumisse da pasta media).
+    if not isinstance(arquivo, UploadedFile):
+        return arquivo
+    if arquivo.size > LIMITE_ARQUIVO_MB * 1024 * 1024:
+        raise forms.ValidationError(
+            f"O arquivo tem {arquivo.size / (1024 * 1024):.1f} MB — o limite é "
+            f"{LIMITE_ARQUIVO_MB} MB. Diminua a resolução da foto ou do "
+            f"escaneamento e tente de novo."
+        )
+    return arquivo
 
 
 class _ArquivoAtual:
@@ -393,7 +414,7 @@ class ContratoForm(BootstrapFormMixin, forms.ModelForm):
         arquivo = self.cleaned_data.get("arquivo")
         if arquivo and getattr(arquivo, "name", "") and not arquivo.name.lower().endswith(".pdf"):
             raise forms.ValidationError("O contrato precisa estar em PDF (.pdf).")
-        return arquivo
+        return _valida_tamanho(arquivo)
 
 
 class AditivoForm(BootstrapFormMixin, forms.ModelForm):
@@ -444,7 +465,7 @@ class AditivoForm(BootstrapFormMixin, forms.ModelForm):
         arquivo = self.cleaned_data.get("arquivo")
         if arquivo and getattr(arquivo, "name", "") and not arquivo.name.lower().endswith(".pdf"):
             raise forms.ValidationError("O aditivo precisa estar em PDF (.pdf).")
-        return arquivo
+        return _valida_tamanho(arquivo)
 
     def clean(self):
         dados = super().clean()
@@ -496,7 +517,7 @@ class AditivoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
         arquivo = self.cleaned_data.get("arquivo")
         if arquivo and getattr(arquivo, "name", "") and not arquivo.name.lower().endswith(".pdf"):
             raise forms.ValidationError("O aditivo precisa estar em PDF (.pdf).")
-        return arquivo
+        return _valida_tamanho(arquivo)
 
 
 class EquipamentoSelect(forms.Select):
@@ -624,7 +645,7 @@ def _valida_arquivo_os(arquivo):
             raise forms.ValidationError(
                 "A OS digitalizada precisa ser PDF, JPG ou PNG."
             )
-    return arquivo
+    return _valida_tamanho(arquivo)
 
 
 class ChamadoEncerramentoForm(BootstrapFormMixin, forms.ModelForm):

@@ -75,8 +75,10 @@ class ClassificacaoTests(TestCase):
 
 class BaseLogada(TestCase):
     def setUp(self):
+        # O login "admin" é o Analista (settings.USUARIO_ANALISTA): enxerga
+        # contratos e PDFs sem precisar de permissão marcada.
         self.user = get_user_model().objects.create_superuser(
-            "teste", "teste@exemplo.com", "senha-de-teste"
+            "admin", "teste@exemplo.com", "senha-de-teste"
         )
         self.client.force_login(self.user)
 
@@ -1581,3 +1583,257 @@ class EdicaoDeAditivoTests(BaseLogada):
         self.client.force_login(sem_perm)
         resposta = self.client.get(reverse("aditivo_editar", args=[self.manual.pk]))
         self.assertEqual(resposta.status_code, 403)
+
+
+class BaseComPerfis(BaseComChamado):
+    """O Analista ("admin", de BaseLogada) mais um técnico comum, a recepção
+    e um superusuário que não é o Analista."""
+
+    def setUp(self):
+        from django.contrib.auth.models import Group
+
+        super().setUp()
+        User = get_user_model()
+        self.tecnico = User.objects.create_user("tecnico", password="x")
+        self.tecnico.groups.add(Group.objects.get(name="Usuário comum"))
+        self.recepcao = User.objects.create_user("Pedrorios1", password="x")
+        self.recepcao.groups.add(Group.objects.get(name="Recepção"))
+        self.outro_super = User.objects.create_superuser("chefe", password="x")
+        # O chamado de BaseComChamado é do técnico; o outro fica com o Analista
+        Chamado.objects.filter(pk=self.chamado.pk).update(tecnico=self.tecnico)
+        self.chamado.refresh_from_db()
+
+
+class AnalistaTests(BaseComPerfis):
+    """Só o Analista define perfis e libera áreas — nem outro superusuário."""
+
+    def test_so_o_analista_abre_a_tela_de_permissoes(self):
+        url = reverse("permissoes_usuarios")
+        self.assertEqual(self.client.get(url).status_code, 200)
+        for usuario in (self.outro_super, self.recepcao, self.tecnico):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(url).status_code, 403)
+
+    def test_administrador_antigo_nao_abre_mais(self):
+        self.tecnico.is_staff = True
+        self.tecnico.save()
+        self.client.force_login(self.tecnico)
+        self.assertEqual(self.client.get(reverse("permissoes_usuarios")).status_code, 403)
+
+    def test_so_o_analista_mexe_em_usuarios_no_admin(self):
+        lista = reverse("admin:auth_user_changelist")
+        ficha = reverse("admin:auth_user_change", args=[self.outro_super.pk])
+        self.assertEqual(self.client.get(lista).status_code, 200)
+        self.client.force_login(self.outro_super)
+        self.assertEqual(self.client.get(lista).status_code, 403)
+        self.assertEqual(self.client.get(ficha).status_code, 403)
+        # ...mas continua entrando no /admin/ para cuidar dos dados
+        self.assertEqual(
+            self.client.get(reverse("admin:inventario_cliente_changelist")).status_code,
+            200,
+        )
+
+    def test_superusuario_nao_ganha_contratos_sozinho(self):
+        self.client.force_login(self.outro_super)
+        self.assertEqual(self.client.get(reverse("contrato_lista")).status_code, 403)
+
+    def perfil(self, usuario, codigo):
+        self.client.post(
+            reverse("permissoes_usuarios"), {f"perfil_{usuario.pk}": codigo}
+        )
+        usuario.refresh_from_db()
+        return {g.name for g in usuario.groups.all()}
+
+    def test_analista_da_e_tira_superusuario(self):
+        grupos = self.perfil(self.tecnico, "super")
+        self.assertTrue(self.tecnico.is_superuser and self.tecnico.is_staff)
+        self.assertEqual(grupos, set())
+        grupos = self.perfil(self.tecnico, "comum")
+        self.assertFalse(self.tecnico.is_superuser or self.tecnico.is_staff)
+        self.assertEqual(grupos, {"Usuário comum"})
+
+    def test_analista_troca_comum_por_recepcao(self):
+        self.assertEqual(self.perfil(self.tecnico, "recepcao"), {"Recepção"})
+
+    def test_analista_libera_contratos(self):
+        self.client.post(
+            reverse("permissoes_usuarios"),
+            {f"perfil_{self.tecnico.pk}": "comum",
+             f"ver_contratos_{self.tecnico.pk}": "on"},
+        )
+        self.client.force_login(self.tecnico)
+        self.assertEqual(self.client.get(reverse("contrato_lista")).status_code, 200)
+
+    @override_settings(USUARIO_ANALISTA="outro-login")
+    def test_o_analista_e_o_login_configurado(self):
+        self.assertEqual(self.client.get(reverse("permissoes_usuarios")).status_code, 403)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class UsuarioComumTests(BaseComPerfis):
+    """Cadastra equipamento e manutenção; vê e encerra só as OS dele."""
+
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.tecnico)
+
+    def test_ve_so_as_proprias_os_na_lista_e_no_historico(self):
+        lista = self.client.get(reverse("chamado_lista"), {"status": ""})
+        self.assertEqual(list(lista.context["chamados"]), [self.chamado])
+        self.assertEqual(lista.context["abertos"], 1)
+        historico = self.client.get(reverse("chamado_historico"))
+        self.assertEqual(historico.context["total"], 1)
+
+    def test_os_de_outro_tecnico_da_403(self):
+        for rota in ("chamado_detalhe", "chamado_imprimir", "chamado_arquivo"):
+            resposta = self.client.get(reverse(rota, args=[self.chamado_outro.pk]))
+            self.assertEqual(resposta.status_code, 403, rota)
+
+    def test_o_painel_continua_mostrando_todos(self):
+        dados = self.client.get(reverse("chamado_painel_dados")).json()
+        self.assertEqual(dados["total"], 2)
+
+    def test_encerra_a_propria_os_com_foto(self):
+        resposta = self.client.post(
+            reverse("chamado_detalhe", args=[self.chamado.pk]),
+            {"realizado": "Trocada a fonte.", "peca_substituida": "",
+             "observacoes": "",
+             "arquivo_os": SimpleUploadedFile("os.jpg", b"foto",
+                                              content_type="image/jpeg")},
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.chamado.refresh_from_db()
+        self.assertTrue(self.chamado.encerrado)
+        self.assertTrue(self.chamado.arquivo_os.name.endswith(".jpg"))
+
+    def test_nao_encerra_os_de_outro(self):
+        resposta = self.client.post(
+            reverse("chamado_detalhe", args=[self.chamado_outro.pk]),
+            {"realizado": "x", "peca_substituida": "", "observacoes": ""},
+        )
+        self.assertEqual(resposta.status_code, 403)
+        self.chamado_outro.refresh_from_db()
+        self.assertFalse(self.chamado_outro.encerrado)
+
+    def test_cadastra_equipamento_e_registra_manutencao(self):
+        maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        self.assertEqual(self.client.get(reverse("equipamento_novo")).status_code, 200)
+        self.assertEqual(
+            self.client.get(reverse("manutencao_nova", args=[maquina.pk])).status_code,
+            200,
+        )
+
+    def test_nao_cadastra_cliente_fornecedor_nem_abre_chamado(self):
+        for rota in ("cliente_novo", "fornecedor_novo", "chamado_novo"):
+            self.assertEqual(self.client.get(reverse(rota)).status_code, 403, rota)
+
+    def test_nao_exclui_equipamento(self):
+        maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        resposta = self.client.post(reverse("equipamento_excluir", args=[maquina.pk]))
+        self.assertEqual(resposta.status_code, 403)
+        self.assertTrue(Equipamento.objects.filter(pk=maquina.pk).exists())
+
+    def test_sem_permissao_de_excluir_nada(self):
+        from django.contrib.auth.models import Group
+
+        codenames = set(
+            Group.objects.get(name="Usuário comum")
+            .permissions.values_list("codename", flat=True)
+        )
+        self.assertFalse({c for c in codenames if c.startswith("delete_")})
+        self.assertNotIn("add_cliente", codenames)
+        self.assertNotIn("add_fornecedor", codenames)
+
+
+class RecepcaoTests(BaseComPerfis):
+    def setUp(self):
+        super().setUp()
+        self.client.force_login(self.recepcao)
+
+    def test_abre_chamado_e_ve_todas_as_os(self):
+        self.assertEqual(self.client.get(reverse("chamado_novo")).status_code, 200)
+        lista = self.client.get(reverse("chamado_lista"), {"status": ""})
+        self.assertEqual(lista.context["total"], 2)
+        self.assertEqual(
+            self.client.get(reverse("chamado_detalhe", args=[self.chamado.pk])).status_code,
+            200,
+        )
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class LimiteDeTamanhoDoArquivoTests(BaseComChamado):
+    def anexa(self, tamanho):
+        return self.client.post(
+            reverse("chamado_detalhe", args=[self.chamado.pk]),
+            {"anexar": "1",
+             "arquivo_os": SimpleUploadedFile("foto.jpg", b"x" * tamanho,
+                                              content_type="image/jpeg")},
+        )
+
+    def test_recusa_arquivo_acima_do_limite(self):
+        from .forms import LIMITE_ARQUIVO_MB
+
+        resposta = self.anexa(LIMITE_ARQUIVO_MB * 1024 * 1024 + 1)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("limite", str(resposta.context["anexo_form"].errors))
+        self.chamado.refresh_from_db()
+        self.assertFalse(self.chamado.arquivo_os)
+
+    def test_aceita_arquivo_dentro_do_limite(self):
+        self.assertEqual(self.anexa(1024).status_code, 302)
+
+    def test_editar_sem_trocar_o_arquivo_nao_confere_o_tamanho(self):
+        cliente = Cliente.objects.create(nome="X")
+        contrato = Contrato.objects.create(
+            numero="1", cliente=cliente, data_contrato="2026-08-01",
+        )
+        # Arquivo "salvo" que não existe mais na pasta: não pode quebrar
+        Contrato.objects.filter(pk=contrato.pk).update(arquivo="contratos/sumiu.pdf")
+        resposta = self.client.post(
+            reverse("contrato_editar", args=[contrato.pk]),
+            {"numero": "1", "titulo": "", "cliente": cliente.pk,
+             "data_contrato": "2026-08-01", "valor": "", "observacoes": ""},
+        )
+        self.assertEqual(resposta.status_code, 302)
+
+
+class AplicarPerfisTests(BaseComPerfis):
+    def roda(self, *args):
+        saida = io.StringIO()
+        call_command("aplicar_perfis", *args, stdout=saida)
+        return saida.getvalue()
+
+    def test_sem_confirmar_nao_grava(self):
+        saida = self.roda("--recepcao", "tecnico")
+        self.assertIn("Nada foi gravado", saida)
+        self.outro_super.refresh_from_db()
+        self.assertTrue(self.outro_super.is_superuser)
+
+    def test_confirmar_tira_superusuario_de_todos_menos_o_analista(self):
+        self.roda("--recepcao", "tecnico", "--confirmar")
+        self.outro_super.refresh_from_db()
+        self.assertFalse(self.outro_super.is_superuser or self.outro_super.is_staff)
+        self.assertEqual(
+            [g.name for g in self.outro_super.groups.all()], ["Usuário comum"]
+        )
+        self.assertEqual([g.name for g in self.tecnico.groups.all()], ["Recepção"])
+        self.assertEqual([g.name for g in self.recepcao.groups.all()], ["Recepção"])
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_superuser)
+
+    def test_login_inexistente_para_tudo(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError):
+            self.roda("--recepcao", "ninguem", "--confirmar")
+        self.outro_super.refresh_from_db()
+        self.assertTrue(self.outro_super.is_superuser)
+
+    @override_settings(USUARIO_ANALISTA="nao-existe")
+    def test_sem_analista_nao_faz_nada(self):
+        from django.core.management.base import CommandError
+
+        with self.assertRaises(CommandError):
+            self.roda("--confirmar")
+        self.outro_super.refresh_from_db()
+        self.assertTrue(self.outro_super.is_superuser)
