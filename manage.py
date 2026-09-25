@@ -7,6 +7,9 @@ import sys
 def main():
     """Run administrative tasks."""
     os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+    # Linha de comando = desenvolvimento ou manutenção, nunca o site no ar
+    # (que entra pelo WSGI). Ver o comentário do DEBUG em config/settings.py.
+    os.environ.setdefault('DJANGO_DEBUG', 'True')
     try:
         from django.core.management import execute_from_command_line
     except ImportError as exc:

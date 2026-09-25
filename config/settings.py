@@ -17,20 +17,35 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 
-# Quick-start development settings - unsuitable for production
-# See https://docs.djangoproject.com/en/6.0/howto/deployment/checklist/
+# Modo de desenvolvimento x produção
+# ----------------------------------
+# O padrão é PRODUÇÃO (DEBUG desligado). Esquecer uma variável de ambiente no
+# servidor tem que deixar o site fechado, nunca aberto: com DEBUG ligado, um
+# erro qualquer mostra código, caminhos e dados da requisição para quem
+# estiver do outro lado.
+#
+# No computador de desenvolvimento quem liga o DEBUG é o `manage.py`
+# (DJANGO_DEBUG=True por padrão), então o `runserver` continua funcionando
+# sem configurar nada. O site em produção entra pelo arquivo WSGI, que não
+# passa pelo `manage.py` — lá o DEBUG fica desligado a menos que alguém
+# defina DJANGO_DEBUG=True de propósito.
+DEBUG = os.environ.get('DJANGO_DEBUG', 'False') == 'True'
 
-# SECURITY WARNING: keep the secret key used in production secret!
-# Em produção, defina a variável de ambiente DJANGO_SECRET_KEY (ex.: no
-# arquivo WSGI do PythonAnywhere) em vez de usar o valor padrão abaixo.
-SECRET_KEY = os.environ.get(
-    'DJANGO_SECRET_KEY',
-    'django-insecure-tzodf7v9s6%^kid6h%i51#zlcrm%$rwwk0r@yt1lopey1&qxyk',
-)
+# A chave assina sessões e links de redefinição de senha: quem a conhece
+# consegue se passar por qualquer usuário. Em produção ela SÓ pode vir da
+# variável de ambiente DJANGO_SECRET_KEY (no arquivo WSGI do PythonAnywhere);
+# sem ela o site se recusa a subir. A chave fixa abaixo serve só para
+# desenvolvimento e não vale nada fora dele.
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', '')
+if not SECRET_KEY:
+    if not DEBUG:
+        from django.core.exceptions import ImproperlyConfigured
 
-# SECURITY WARNING: don't run with debug turned on in production!
-# Defina DJANGO_DEBUG=False em produção.
-DEBUG = os.environ.get('DJANGO_DEBUG', 'True') == 'True'
+        raise ImproperlyConfigured(
+            'Defina a variável de ambiente DJANGO_SECRET_KEY (produção) ou '
+            'DJANGO_DEBUG=True (desenvolvimento).'
+        )
+    SECRET_KEY = 'django-insecure-somente-desenvolvimento-nao-usar-em-producao'
 
 # Em produção, defina DJANGO_ALLOWED_HOSTS com os hosts separados por vírgula,
 # ex.: "suaempresa.pythonanywhere.com,stocklink.suaempresa.com.br"
@@ -39,6 +54,30 @@ ALLOWED_HOSTS = [
     for h in os.environ.get('DJANGO_ALLOWED_HOSTS', '').split(',')
     if h.strip()
 ]
+
+# HTTPS em produção
+# -----------------
+# No PythonAnywhere o HTTPS termina no proxy da frente, que repassa a
+# requisição ao Django por HTTP e avisa no cabeçalho X-Forwarded-Proto se o
+# navegador usou https. Sem ler esse cabeçalho o Django acharia que tudo é
+# HTTP e não mandaria o HSTS.
+#
+# O redirecionamento de http:// para https:// NÃO é feito aqui
+# (SECURE_SSL_REDIRECT): quem faz é a opção "Force HTTPS" da aba Web do
+# PythonAnywhere. Se o cabeçalho acima deixasse de chegar, o redirect pelo
+# Django viraria um laço infinito e derrubaria o site.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+
+    # Cookies de sessão e CSRF só trafegam por https: numa rede Wi-Fi
+    # aberta, ninguém copia a sessão de quem está logado.
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
+
+    # HSTS: o navegador passa a recusar http:// para este site pelo tempo
+    # definido. Começa em 1 hora; depois de confirmar que tudo funciona em
+    # https, dá para subir (ex.: DJANGO_HSTS_SECONDS=31536000, um ano).
+    SECURE_HSTS_SECONDS = int(os.environ.get('DJANGO_HSTS_SECONDS', '3600'))
 
 
 # Application definition
