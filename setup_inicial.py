@@ -5,19 +5,20 @@ django.setup()
 
 from getpass import getpass
 
+from django.conf import settings
 from django.contrib.auth.models import User, Group
 
 # Superusuario admin
-if not User.objects.filter(username="admin").exists():
+if not User.objects.filter(username=settings.USUARIO_ANALISTA).exists():
     admin_email = os.environ.get("ADMIN_EMAIL") or input("E-mail do admin: ")
     admin_senha = os.environ.get("ADMIN_SENHA") or getpass("Senha do admin: ")
-    User.objects.create_superuser("admin", admin_email, admin_senha)
-    print("Superusuario 'admin' criado")
+    User.objects.create_superuser(settings.USUARIO_ANALISTA, admin_email, admin_senha)
+    print(f"Superusuario '{settings.USUARIO_ANALISTA}' (Analista) criado")
 else:
-    print("Superusuario 'admin' ja existe")
+    print(f"Superusuario '{settings.USUARIO_ANALISTA}' (Analista) ja existe")
 
 # Grupos dos perfis ("Técnico" e "Recepção") vêm da migração 0018.
-# O login "admin" é o Analista (settings.USUARIO_ANALISTA).
+# O superusuário acima é o Analista (settings.USUARIO_ANALISTA).
 grupo = Group.objects.get(name="Técnico")
 
 # Técnico de exemplo

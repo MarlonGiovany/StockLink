@@ -221,7 +221,8 @@ NOME_EMPRESA = 'INFORLINK INOVAÇÕES EM TECNOLOGIA'
 
 # Analista: o único usuário que define perfis e libera áreas restritas
 # (ver inventario/permissoes.py). É o login do Márlon.
-USUARIO_ANALISTA = 'admin'
+# O login diferencia maiúsculas: em produção é "Admin", com A maiúsculo.
+USUARIO_ANALISTA = 'Admin'
 
 # Autenticação
 LOGIN_URL = 'login'
