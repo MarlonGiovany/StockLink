@@ -1,5 +1,9 @@
+from django import forms
 from django.contrib import admin
+from django.contrib.admin.widgets import AdminFileWidget
+from django.db import models
 
+from .forms import LinkProtegidoMixin, protege_arquivo
 from .models import (
     Aditivo,
     Chamado,
@@ -17,6 +21,24 @@ from .models import (
 admin.site.site_header = "StockLink — Administração"
 admin.site.site_title = "StockLink"
 admin.site.index_title = "Painel de administração"
+
+
+# PDFs e OS digitalizadas: o "Atualmente: arquivo" do admin abre pela view que
+# confere a permissão, igual às telas do sistema (ver LinkProtegidoMixin).
+class ArquivoProtegidoAdminInput(LinkProtegidoMixin, AdminFileWidget):
+    pass
+
+
+def form_com_arquivo_protegido(campo, rota):
+    class Form(forms.ModelForm):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            protege_arquivo(self, campo, rota)
+
+    return Form
+
+
+ARQUIVO_PROTEGIDO = {models.FileField: {"widget": ArquivoProtegidoAdminInput}}
 
 
 class ManutencaoInline(admin.TabularInline):
@@ -90,6 +112,8 @@ class AditivoInline(admin.TabularInline):
     model = Aditivo
     extra = 0
     fields = ("numero", "tipo", "descricao", "valor", "data", "arquivo")
+    form = form_com_arquivo_protegido("arquivo", "aditivo_pdf")
+    formfield_overrides = ARQUIVO_PROTEGIDO
 
 
 @admin.register(Contrato)
@@ -100,6 +124,8 @@ class ContratoAdmin(admin.ModelAdmin):
     date_hierarchy = "data_contrato"
     readonly_fields = ("criado_em", "criado_por")
     inlines = [AditivoInline]
+    form = form_com_arquivo_protegido("arquivo", "contrato_pdf")
+    formfield_overrides = ARQUIVO_PROTEGIDO
 
 
 @admin.register(Aditivo)
@@ -108,6 +134,8 @@ class AditivoAdmin(admin.ModelAdmin):
     list_filter = ("tipo", "data")
     search_fields = ("contrato__numero", "descricao")
     readonly_fields = ("criado_em", "criado_por")
+    form = form_com_arquivo_protegido("arquivo", "aditivo_pdf")
+    formfield_overrides = ARQUIVO_PROTEGIDO
 
 
 @admin.register(Movimentacao)
@@ -132,6 +160,8 @@ class ChamadoAdmin(admin.ModelAdmin):
     date_hierarchy = "aberto_em"
     # As duas pontas do tempo são gravadas pelo sistema — ninguém digita
     readonly_fields = ("aberto_em", "aberto_por", "encerrado_em", "encerrado_por")
+    form = form_com_arquivo_protegido("arquivo_os", "chamado_arquivo")
+    formfield_overrides = ARQUIVO_PROTEGIDO
 
     @admin.display(description="Tempo")
     def duracao_texto(self, obj):

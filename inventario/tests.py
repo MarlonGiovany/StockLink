@@ -1419,3 +1419,165 @@ class ImportarClientesTests(TestCase):
         self.assertEqual(Cliente.objects.count(), 0)
         self.assertIn("sem nome", saida)
 
+
+
+def _pdf(nome="documento.pdf"):
+    return SimpleUploadedFile(nome, b"%PDF-1.4 teste", content_type="application/pdf")
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class LinkDoArquivoAtualTests(BaseComChamado):
+    """O "Atualmente: arquivo" dos campos de upload abre pela view protegida.
+
+    A pasta media não é servida por URL pública, então o link padrão do
+    Django (/media/...) dava 404 — e, quando era servida, abria o PDF sem
+    checar permissão.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.contrato = Contrato.objects.create(
+            numero="20", cliente=self.cliente, data_contrato="2026-08-01",
+            arquivo=_pdf("contrato-20.pdf"),
+        )
+        self.aditivo = Aditivo.objects.create(
+            contrato=self.contrato, numero=1, descricao="Manual",
+            data="2026-09-01", arquivo=_pdf("aditivo-1.pdf"),
+        )
+        self.chamado.arquivo_os = _pdf("os.pdf")
+        self.chamado.save()
+
+    def confere(self, url, protegida):
+        html = self.client.get(url).content.decode()
+        self.assertNotIn("/media/", html)
+        self.assertIn(f'href="{protegida}"', html)
+
+    def test_editar_contrato(self):
+        self.confere(
+            reverse("contrato_editar", args=[self.contrato.pk]),
+            reverse("contrato_pdf", args=[self.contrato.pk]),
+        )
+
+    def test_editar_aditivo(self):
+        self.confere(
+            reverse("aditivo_editar", args=[self.aditivo.pk]),
+            reverse("aditivo_pdf", args=[self.aditivo.pk]),
+        )
+
+    def test_encerramento_do_chamado(self):
+        self.confere(
+            reverse("chamado_detalhe", args=[self.chamado.pk]),
+            reverse("chamado_arquivo", args=[self.chamado.pk]),
+        )
+
+    def test_admin_do_contrato_e_aditivos_dentro_dele(self):
+        url = reverse("admin:inventario_contrato_change", args=[self.contrato.pk])
+        self.confere(url, reverse("contrato_pdf", args=[self.contrato.pk]))
+        self.confere(url, reverse("aditivo_pdf", args=[self.aditivo.pk]))
+
+    def test_admin_do_aditivo(self):
+        self.confere(
+            reverse("admin:inventario_aditivo_change", args=[self.aditivo.pk]),
+            reverse("aditivo_pdf", args=[self.aditivo.pk]),
+        )
+
+    def test_admin_do_chamado(self):
+        self.confere(
+            reverse("admin:inventario_chamado_change", args=[self.chamado.pk]),
+            reverse("chamado_arquivo", args=[self.chamado.pk]),
+        )
+
+    def test_limpar_continua_removendo_o_pdf_do_contrato(self):
+        resposta = self.client.post(
+            reverse("contrato_editar", args=[self.contrato.pk]),
+            {
+                "numero": "20", "titulo": "", "cliente": self.cliente.pk,
+                "data_contrato": "2026-08-01", "valor": "",
+                "observacoes": "", "arquivo-clear": "on",
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.contrato.refresh_from_db()
+        self.assertFalse(self.contrato.arquivo)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class EdicaoDeAditivoTests(BaseLogada):
+    """Editar um aditivo corrige o registro sem mexer nas máquinas."""
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="RODOSERGIPE")
+        self.contrato = Contrato.objects.create(
+            numero="10", cliente=self.cliente, data_contrato="2026-08-01"
+        )
+        self.manual = Aditivo.objects.create(
+            contrato=self.contrato, numero=1, tipo=Aditivo.Tipo.REMOCAO,
+            descricao="1 máquina removida", valor="100.00", data="2026-08-10",
+        )
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        self.com_maquina = Aditivo.objects.create(
+            contrato=self.contrato, numero=2, tipo=Aditivo.Tipo.ADICAO,
+            descricao="1 máquina(s) incluída(s): INF-1001", valor="250.00",
+            data="2026-09-01",
+        )
+        self.locacao = Locacao.objects.create(
+            equipamento=self.maquina, cliente=self.cliente,
+            contrato=self.contrato, aditivo=self.com_maquina,
+            valor="250.00", data_inicio="2026-09-01", ativa=True,
+        )
+
+    def edita(self, aditivo, **extra):
+        dados = {
+            "tipo": aditivo.tipo, "descricao": aditivo.descricao,
+            "valor": aditivo.valor, "data": "2026-09-15",
+            "observacoes": "corrigido",
+        }
+        dados.update(extra)
+        return self.client.post(reverse("aditivo_editar", args=[aditivo.pk]), dados)
+
+    def test_corrige_os_dados_e_mantem_o_numero(self):
+        resposta = self.edita(self.manual, descricao="2 máquinas removidas", valor="80")
+        self.assertRedirects(
+            resposta, reverse("contrato_detalhe", args=[self.contrato.pk])
+        )
+        self.manual.refresh_from_db()
+        self.assertEqual(self.manual.descricao, "2 máquinas removidas")
+        self.assertEqual(self.manual.valor, Decimal("80"))
+        self.assertEqual(str(self.manual.data), "2026-09-15")
+        self.assertEqual(self.manual.numero, 1)
+
+    def test_com_maquinas_tipo_e_valor_ficam_travados(self):
+        self.edita(self.com_maquina, tipo=Aditivo.Tipo.REMOCAO, valor="999")
+        self.com_maquina.refresh_from_db()
+        self.assertEqual(self.com_maquina.tipo, Aditivo.Tipo.ADICAO)
+        self.assertEqual(self.com_maquina.valor, Decimal("250"))
+        self.assertEqual(self.com_maquina.observacoes, "corrigido")
+        self.locacao.refresh_from_db()
+        self.assertTrue(self.locacao.ativa)
+        self.assertEqual(self.locacao.aditivo, self.com_maquina)
+
+    def test_troca_o_pdf(self):
+        self.edita(self.manual, arquivo=_pdf("aditivo-assinado.pdf"))
+        self.manual.refresh_from_db()
+        self.assertIn("aditivo-assinado", self.manual.arquivo.name)
+
+    def test_recusa_arquivo_que_nao_e_pdf(self):
+        resposta = self.edita(
+            self.manual, arquivo=SimpleUploadedFile("foto.jpg", b"x")
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("arquivo", resposta.context["form"].errors)
+
+    def test_botao_de_editar_aparece_na_ficha_do_contrato(self):
+        html = self.client.get(
+            reverse("contrato_detalhe", args=[self.contrato.pk])
+        ).content.decode()
+        self.assertIn(reverse("aditivo_editar", args=[self.manual.pk]), html)
+        self.assertIn(reverse("aditivo_editar", args=[self.com_maquina.pk]), html)
+
+    def test_sem_permissao_de_alterar_aditivo_da_403(self):
+        sem_perm = get_user_model().objects.create_user("sem", password="x")
+        self.client.force_login(sem_perm)
+        resposta = self.client.get(reverse("aditivo_editar", args=[self.manual.pk]))
+        self.assertEqual(resposta.status_code, 403)

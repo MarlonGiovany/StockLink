@@ -188,7 +188,10 @@
               <td>
                 {% if a.arquivo and pode_ver_pdfs %}<a href="{% url 'aditivo_pdf' a.pk %}" target="_blank">📄</a>{% else %}—{% endif %}
               </td>
-              <td class="text-end">
+              <td class="text-end text-nowrap">
+                {% if perms.inventario.change_aditivo %}
+                  <a href="{% url 'aditivo_editar' a.pk %}" class="btn btn-sm btn-outline-secondary py-0" title="Editar aditivo">✎</a>
+                {% endif %}
                 {% if perms.inventario.delete_aditivo and a.id == ultimo_aditivo_id %}
                   <a href="{% url 'aditivo_excluir' a.pk %}" class="btn btn-sm btn-outline-danger py-0">×</a>
                 {% endif %}

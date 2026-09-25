@@ -17,6 +17,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from .forms import (
+    AditivoEdicaoForm,
     AditivoForm,
     ChamadoAberturaForm,
     ChamadoAnexoForm,
@@ -895,6 +896,30 @@ def aditivo_novo(request, pk):
     return render(
         request, "inventario/aditivo_form.html",
         {"form": form, "contrato": contrato},
+    )
+
+
+@login_required
+@permission_required("inventario.change_aditivo", raise_exception=True)
+@exige_area(VER_CONTRATOS)
+def aditivo_editar(request, pk):
+    """Corrige descrição, data, PDF e observações de um aditivo já salvo.
+
+    As máquinas do aditivo não mudam por aqui (ver AditivoEdicaoForm).
+    """
+    aditivo = get_object_or_404(Aditivo.objects.select_related("contrato"), pk=pk)
+    contrato = aditivo.contrato
+    if request.method == "POST":
+        form = AditivoEdicaoForm(request.POST, request.FILES, instance=aditivo)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f"Aditivo {aditivo.numero} atualizado.")
+            return redirect("contrato_detalhe", pk=contrato.pk)
+    else:
+        form = AditivoEdicaoForm(instance=aditivo)
+    return render(
+        request, "inventario/aditivo_editar.html",
+        {"form": form, "aditivo": aditivo, "contrato": contrato},
     )
 
 

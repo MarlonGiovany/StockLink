@@ -3,6 +3,7 @@ from decimal import Decimal
 
 from django import forms
 from django.contrib.auth import get_user_model
+from django.urls import reverse
 
 from .models import (
     Aditivo,
@@ -33,6 +34,53 @@ def _formata_telefone(digitos):
     if len(digitos) == 11:
         return f"({digitos[0:2]}) {digitos[2:7]}-{digitos[7:11]}"
     return f"({digitos[0:2]}) {digitos[2:6]}-{digitos[6:10]}"
+
+
+class _ArquivoAtual:
+    """O arquivo já anexado, como o widget de upload o mostra.
+
+    Mesmo texto de sempre (o caminho do arquivo); só o endereço do link muda.
+    """
+
+    def __init__(self, arquivo, url):
+        self.arquivo = arquivo
+        self.url = url
+
+    def __str__(self):
+        return str(self.arquivo)
+
+
+class LinkProtegidoMixin:
+    """Faz o "Atualmente: arquivo.pdf" do campo de upload abrir pela view
+    que confere a permissão, e não por /media/.
+
+    O Django monta esse link com o endereço público do arquivo (/media/...),
+    que o servidor não entrega mais — a pasta media só sai pelo Django, depois
+    da checagem de login e de permissão. Sem a troca o link dava 404; antes
+    de a pasta ser fechada, ele abria o PDF para qualquer um.
+
+    Quem define o endereço é `protege_arquivo()`, porque ele depende do
+    registro que está sendo editado.
+    """
+
+    url_protegida = None
+
+    def get_context(self, name, value, attrs):
+        contexto = super().get_context(name, value, attrs)
+        if contexto["widget"]["is_initial"] and self.url_protegida:
+            contexto["widget"]["value"] = _ArquivoAtual(value, self.url_protegida)
+        return contexto
+
+
+class ArquivoProtegidoInput(LinkProtegidoMixin, forms.ClearableFileInput):
+    pass
+
+
+def protege_arquivo(form, campo, rota):
+    """Aponta o link do arquivo atual de `campo` para a view `rota`."""
+    instancia = form.instance
+    if campo in form.fields and instancia.pk and getattr(instancia, campo):
+        form.fields[campo].widget.url_protegida = reverse(rota, args=[instancia.pk])
 
 
 class BootstrapFormMixin:
@@ -334,7 +382,12 @@ class ContratoForm(BootstrapFormMixin, forms.ModelForm):
                 attrs={"type": "date"}, format="%Y-%m-%d"
             ),
             "observacoes": forms.Textarea(attrs={"rows": 2}),
+            "arquivo": ArquivoProtegidoInput,
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        protege_arquivo(self, "arquivo", "contrato_pdf")
 
     def clean_arquivo(self):
         arquivo = self.cleaned_data.get("arquivo")
@@ -403,6 +456,47 @@ class AditivoForm(BootstrapFormMixin, forms.ModelForm):
                 "alteração manualmente (é o caso de uma Remoção, por exemplo).",
             )
         return dados
+
+
+class AditivoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
+    """Corrige um aditivo já registrado — só os dados do registro.
+
+    Não mexe nas máquinas: incluir ou tirar máquina continua sendo pelo
+    aditivo novo e pela exclusão do último aditivo, que cuidam das locações
+    e do status de cada equipamento. O número também não muda, para não
+    furar a sequência do contrato.
+
+    Quando o aditivo incluiu máquinas, o tipo (Adição) e o valor (soma das
+    máquinas) ficam travados: mudar só aqui deixaria o registro dizendo uma
+    coisa e as locações outra. O valor de cada máquina se ajusta na ficha do
+    contrato, em "valor em lote".
+    """
+
+    class Meta:
+        model = Aditivo
+        fields = ["tipo", "descricao", "valor", "data", "arquivo", "observacoes"]
+        widgets = {
+            "data": forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+            "observacoes": forms.Textarea(attrs={"rows": 2}),
+            "arquivo": ArquivoProtegidoInput,
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        protege_arquivo(self, "arquivo", "aditivo_pdf")
+        if self.instance.pk and self.instance.locacoes.exists():
+            for campo in ("tipo", "valor"):
+                self.fields[campo].disabled = True
+            self.fields["valor"].help_text = (
+                "Soma do valor das máquinas deste aditivo. Para mudar, ajuste o "
+                "valor das máquinas na ficha do contrato."
+            )
+
+    def clean_arquivo(self):
+        arquivo = self.cleaned_data.get("arquivo")
+        if arquivo and getattr(arquivo, "name", "") and not arquivo.name.lower().endswith(".pdf"):
+            raise forms.ValidationError("O aditivo precisa estar em PDF (.pdf).")
+        return arquivo
 
 
 class EquipamentoSelect(forms.Select):
@@ -558,7 +652,12 @@ class ChamadoEncerramentoForm(BootstrapFormMixin, forms.ModelForm):
                 attrs={"rows": 3,
                        "placeholder": "Outras observações pertinentes (opcional)."}
             ),
+            "arquivo_os": ArquivoProtegidoInput,
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        protege_arquivo(self, "arquivo_os", "chamado_arquivo")
 
     def clean_realizado(self):
         texto = (self.cleaned_data.get("realizado") or "").strip()
@@ -598,6 +697,11 @@ class ChamadoAnexoForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Chamado
         fields = ["arquivo_os"]
+        widgets = {"arquivo_os": ArquivoProtegidoInput}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        protege_arquivo(self, "arquivo_os", "chamado_arquivo")
 
     def clean_arquivo_os(self):
         arquivo = _valida_arquivo_os(self.cleaned_data.get("arquivo_os"))
