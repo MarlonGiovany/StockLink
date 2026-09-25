@@ -48,6 +48,7 @@ urlpatterns = [
     path("chamados/painel/sinal/", views.chamado_painel_sinal,
          name="chamado_painel_sinal"),
     path("chamados/historico/", views.chamado_historico, name="chamado_historico"),
+    path("chamados/excluir/", views.chamado_excluir, name="chamado_excluir"),
     path("chamados/<int:pk>/", views.chamado_detalhe, name="chamado_detalhe"),
     path("chamados/<int:pk>/imprimir/", views.chamado_imprimir,
          name="chamado_imprimir"),

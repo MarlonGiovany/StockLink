@@ -1890,3 +1890,65 @@ class AplicarPerfisTests(BaseComPerfis):
             self.roda("--confirmar")
         self.outro_super.refresh_from_db()
         self.assertTrue(self.outro_super.is_superuser)
+
+
+@override_settings(MEDIA_ROOT=tempfile.mkdtemp())
+class ExclusaoDeChamadosTests(BaseComPerfis):
+    """O Analista apaga chamados encerrados (os de teste), com confirmação."""
+
+    def setUp(self):
+        super().setUp()
+        self.chamado_outro.status = Chamado.Status.ENCERRADO
+        self.chamado_outro.realizado = "Teste."
+        self.chamado_outro.encerrado_em = timezone.now()
+        self.chamado_outro.arquivo_os = SimpleUploadedFile("os.pdf", b"%PDF-1.4")
+        self.chamado_outro.save()
+        self.caminho = self.chamado_outro.arquivo_os.path
+        self.url = reverse("chamado_excluir")
+
+    def test_selecao_so_aparece_para_o_analista_nos_encerrados(self):
+        lista = reverse("chamado_lista")
+        self.assertTrue(self.client.get(lista, {"status": "ENCERRADO"}).context["pode_excluir"])
+        self.assertFalse(self.client.get(lista, {"status": "ABERTO"}).context["pode_excluir"])
+        self.client.force_login(self.outro_super)
+        self.assertFalse(self.client.get(lista, {"status": "ENCERRADO"}).context["pode_excluir"])
+
+    def test_primeiro_mostra_a_lista_sem_apagar(self):
+        resposta = self.client.post(self.url, {"chamados": [self.chamado_outro.pk]})
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context["chamados"], [self.chamado_outro])
+        self.assertTrue(Chamado.objects.filter(pk=self.chamado_outro.pk).exists())
+
+    def test_confirmando_apaga_o_chamado_e_o_arquivo(self):
+        resposta = self.client.post(
+            self.url, {"chamados": [self.chamado_outro.pk], "confirmar": "1"}
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertFalse(Chamado.objects.filter(pk=self.chamado_outro.pk).exists())
+        self.assertFalse(os.path.exists(self.caminho))
+
+    def test_chamado_aberto_nunca_e_apagado(self):
+        self.client.post(
+            self.url,
+            {"chamados": [self.chamado.pk, self.chamado_outro.pk], "confirmar": "1"},
+        )
+        self.assertTrue(Chamado.objects.filter(pk=self.chamado.pk).exists())
+        self.assertFalse(Chamado.objects.filter(pk=self.chamado_outro.pk).exists())
+
+    def test_so_o_analista_exclui(self):
+        for usuario in (self.outro_super, self.recepcao, self.tecnico):
+            self.client.force_login(usuario)
+            resposta = self.client.post(
+                self.url, {"chamados": [self.chamado_outro.pk], "confirmar": "1"}
+            )
+            self.assertEqual(resposta.status_code, 403, usuario.username)
+        self.assertTrue(Chamado.objects.filter(pk=self.chamado_outro.pk).exists())
+
+    def test_numero_da_proxima_os_nao_se_repete(self):
+        ultimo = self.chamado_outro.pk
+        self.client.post(self.url, {"chamados": [ultimo], "confirmar": "1"})
+        novo = Chamado.objects.create(
+            cliente=self.cliente, equipamento=self.maquina, descricao="Novo",
+            tecnico=self.user, aberto_por=self.user,
+        )
+        self.assertGreater(novo.pk, ultimo)
