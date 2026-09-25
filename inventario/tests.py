@@ -2075,6 +2075,27 @@ class ContagemDeMaquinasPorClienteTests(BaseLogada):
         self.assertEqual(contagem["SEM MÁQUINA"], 0)
         self.assertContains(resposta, "Máquinas locadas")
 
+    def test_numero_abre_as_maquinas_do_cliente(self):
+        cliente = Cliente.objects.create(nome="FUNDAÇÃO TESTE")
+        outro = Cliente.objects.create(nome="PADARIA")
+        m1, m2, m3 = Equipamento.objects.order_by("numero_patrimonio")[:3]
+        Locacao.objects.create(equipamento=m1, cliente=cliente, valor="0",
+                               data_inicio="2026-09-25", ativa=True)
+        Locacao.objects.create(equipamento=m2, cliente=cliente, valor="0",
+                               data_inicio="2026-01-01", ativa=False)   # devolvida
+        Locacao.objects.create(equipamento=m3, cliente=outro, valor="0",
+                               data_inicio="2026-09-25", ativa=True)
+        link = f'{reverse("equipamento_lista")}?cliente={cliente.pk}'
+        self.assertContains(self.client.get(reverse("cliente_lista")), link)
+        resposta = self.client.get(reverse("equipamento_lista"), {"cliente": cliente.pk})
+        self.assertEqual(list(resposta.context["equipamentos"]), [m1])
+        self.assertContains(resposta, "Máquinas locadas para FUNDAÇÃO TESTE")
+        # A busca dentro da tela continua presa ao cliente
+        resposta = self.client.get(
+            reverse("equipamento_lista"), {"cliente": cliente.pk, "q": m3.numero_patrimonio}
+        )
+        self.assertEqual(list(resposta.context["equipamentos"]), [])
+
     def test_busca_continua_funcionando(self):
         Cliente.objects.create(nome="FUNDAÇÃO TESTE")
         Cliente.objects.create(nome="PADARIA")
