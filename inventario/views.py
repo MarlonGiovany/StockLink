@@ -50,6 +50,7 @@ from .permissoes import (
     VER_PDFS,
     aplica_perfil,
     exige_analista,
+    eh_analista,
     exige_area,
     perfil_do_usuario,
     usuario_analista,
@@ -1184,6 +1185,10 @@ def chamado_lista(request):
     )
     visiveis = _chamados_visiveis(request.user)
     contexto = {
+        # Seleção para excluir: só o Analista, e só na lista de encerrados
+        "pode_excluir": (
+            eh_analista(request.user) and filtros["status"] == Chamado.Status.ENCERRADO
+        ),
         "chamados": chamados,
         "total": chamados.count(),
         "abertos": visiveis.filter(status=Chamado.Status.ABERTO).count(),
@@ -1219,6 +1224,48 @@ def chamado_novo(request):
     else:
         form = ChamadoAberturaForm()
     return render(request, "inventario/chamado_form.html", {"form": form})
+
+
+@login_required
+@exige_analista
+def chamado_excluir(request):
+    """Exclui os chamados encerrados marcados na lista — só o Analista.
+
+    Primeiro mostra a lista do que vai sumir; só apaga depois do "Sim,
+    excluir". Chamado em aberto nunca entra, mesmo que o id venha no POST.
+    O número das OS novas continua de onde parou: o SQLite não reaproveita
+    id de linha apagada.
+    """
+    if request.method != "POST":
+        return redirect(f"{reverse('chamado_lista')}?status=ENCERRADO")
+    ids = [i for i in request.POST.getlist("chamados") if i.isdigit()]
+    chamados = list(
+        Chamado.objects.filter(pk__in=ids, status=Chamado.Status.ENCERRADO)
+        .select_related("equipamento", "cliente", "tecnico")
+        .order_by("pk")
+    )
+    voltar = f"{reverse('chamado_lista')}?status=ENCERRADO"
+    if not chamados:
+        messages.info(request, "Marque ao menos um chamado encerrado para excluir.")
+        return redirect(voltar)
+
+    if "confirmar" in request.POST:
+        numeros = ", ".join(c.numero_os for c in chamados)
+        with transaction.atomic():
+            for chamado in chamados:
+                if chamado.arquivo_os:
+                    chamado.arquivo_os.delete(save=False)
+                chamado.delete()
+        messages.success(
+            request,
+            f"{len(chamados)} chamado(s) excluído(s): OS {numeros}.",
+        )
+        return redirect(voltar)
+
+    return render(
+        request, "inventario/chamado_excluir.html",
+        {"chamados": chamados, "voltar": voltar},
+    )
 
 
 @login_required
