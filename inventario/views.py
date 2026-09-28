@@ -1,5 +1,6 @@
 import json
 import os
+import unicodedata
 from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
@@ -508,10 +509,20 @@ def cliente_lista(request):
     )
     if termo:
         clientes = clientes.filter(nome__icontains=termo)
+    # O SQLite ordena byte a byte (acentuados e minúsculas iam para o fim);
+    # aqui a ordem ignora acentos, maiúsculas e espaços nas pontas.
+    clientes = sorted(clientes, key=lambda c: _chave_alfabetica(c.nome))
     return render(
         request, "inventario/cliente_lista.html",
-        {"clientes": clientes, "termo": termo, "total": clientes.count()},
+        {"clientes": clientes, "termo": termo, "total": len(clientes)},
     )
+
+
+def _chave_alfabetica(texto):
+    """Chave de ordenação que trata "Órfão" como "orfao"."""
+    sem_acento = unicodedata.normalize("NFKD", texto)
+    sem_acento = "".join(ch for ch in sem_acento if not unicodedata.combining(ch))
+    return sem_acento.strip().casefold()
 
 
 @login_required
