@@ -691,6 +691,21 @@ class BuscaDeClienteTests(BaseLogada):
         self.assertEqual(resposta.context["total"], 0)
         self.assertIn("XPTO", resposta.content.decode())
 
+    def test_lista_em_ordem_alfabetica_ignorando_acento_e_maiuscula(self):
+        Cliente.objects.create(nome="ÓTICA CENTRAL")
+        Cliente.objects.create(nome="clínica bem estar")
+        resposta = self.client.get(reverse("cliente_lista"))
+        self.assertEqual(
+            [c.nome for c in resposta.context["clientes"]],
+            [
+                "clínica bem estar",
+                "ÓTICA CENTRAL",
+                "PADARIA DO JOÃO",
+                "RODOVIÁRIO SANTA MARIA",
+                "SANTA CASA DE MISERICÓRDIA",
+            ],
+        )
+
 
 class ProdutoTabletTests(BaseLogada):
     """A migração 0013 acrescentou Tablet à lista de produtos."""
