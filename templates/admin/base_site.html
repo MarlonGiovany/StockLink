@@ -1,5 +1,5 @@
 {% extends "admin/base_site.html" %}
-{% load static %}
+{% load i18n static %}
 
 {% block extrahead %}
 {{ block.super }}
@@ -19,5 +19,35 @@
 {% block responsive %}
 {{ block.super }}
 {# Depois do responsive.css do Django, para as nossas regras valerem por cima #}
+<link rel="stylesheet" href="{% static 'inventario/css/admin_visual.css' %}">
 <link rel="stylesheet" href="{% static 'inventario/css/admin_responsivo.css' %}">
+{% endblock %}
+
+{# Cabeçalho no mesmo formato da navbar do sistema #}
+{% block branding %}
+<div id="site-name">
+    <a href="{% url 'admin:index' %}">📦 {{ site_title }}</a>
+    <span class="marca-admin">Administração</span>
+</div>
+{% if user.is_anonymous %}
+  {% include "admin/color_theme_toggle.html" %}
+{% endif %}
+{% endblock %}
+
+{% block welcome-msg %}
+<span class="ola">Olá, <strong>{% firstof user.get_short_name user.get_username %}</strong></span>
+{% endblock %}
+
+{% block userlinks %}
+{% if site_url %}
+    <a href="{{ site_url }}" class="botao-cabecalho">← Voltar ao sistema</a>
+{% endif %}
+{% if user.has_usable_password %}
+    <a href="{% url 'admin:password_change' %}" class="botao-cabecalho">Alterar senha</a>
+{% endif %}
+<form id="logout-form" method="post" action="{% url 'admin:logout' %}">
+    {% csrf_token %}
+    <button type="submit" class="botao-cabecalho">Sair</button>
+</form>
+{% include "admin/color_theme_toggle.html" %}
 {% endblock %}

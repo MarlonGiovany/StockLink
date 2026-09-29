@@ -1,0 +1,342 @@
+/* Visual do /admin/ com a cara do StockLink.
+ *
+ * O admin do Django pinta tudo a partir de variáveis CSS; aqui elas recebem
+ * a paleta das telas do sistema (navbar #162D63, verde #16A34A nos botões de
+ * salvar/adicionar, azul #2563EB nos links, fundo #0f172a no tema escuro).
+ * Carregado depois do base.css e do dark_mode.css do Django
+ * (templates/admin/base_site.html).
+ */
+
+/* ---------- Tema claro ---------- */
+
+:root,
+html[data-theme="light"] {
+    --primary: #162D63;
+    --secondary: #162D63;
+    --accent: #ffffff;
+    --primary-fg: #ffffff;
+
+    --body-fg: #212529;
+    --body-bg: #ffffff;
+    --body-quiet-color: #64748b;
+    --body-medium-color: #334155;
+    --body-loud-color: #0f172a;
+
+    --header-color: #cbd5e1;
+    --header-branding-color: #ffffff;
+    --header-bg: #162D63;
+    --header-link-color: #ffffff;
+
+    --breadcrumbs-fg: #64748b;
+    --breadcrumbs-link-fg: #2563EB;
+    --breadcrumbs-bg: #E2E8F0;
+
+    --link-fg: #2563EB;
+    --link-hover-color: #1D4ED8;
+    --link-selected-fg: #162D63;
+
+    --hairline-color: #E2E8F0;
+    --border-color: #cbd5e1;
+
+    --error-fg: #DC2626;
+
+    --message-info-bg: #dbeafe;
+    --message-success-bg: #dcfce7;
+    --message-warning-bg: #fef3c7;
+    --message-error-bg: #fee2e2;
+
+    --darkened-bg: #f4f6fb;
+    --selected-bg: #E2E8F0;
+    --selected-row: #eff6ff;
+
+    --button-fg: #ffffff;
+    --button-bg: #2563EB;
+    --button-hover-bg: #1D4ED8;
+    --default-button-bg: #16A34A;
+    --default-button-hover-bg: #15803D;
+    --close-button-bg: #64748b;
+    --close-button-hover-bg: #475569;
+    --delete-button-bg: #DC2626;
+    --delete-button-hover-bg: #B91C1C;
+
+    --object-tools-fg: #ffffff;
+    --object-tools-bg: #16A34A;
+    --object-tools-hover-bg: #15803D;
+
+    /* Mesma fonte do Bootstrap usado nas telas do sistema */
+    --font-family-primary:
+        system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue",
+        "Noto Sans", "Liberation Sans", Arial, sans-serif,
+        "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+/* ---------- Tema escuro ---------- */
+/* Duas entradas, como no Django: tema "automático" seguindo o sistema
+   operacional, e tema escuro escolhido no botão. */
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --primary: #162D63;
+        --primary-fg: #f8fafc;
+
+        --body-fg: #e2e8f0;
+        --body-bg: #0f172a;
+        --body-quiet-color: #94a3b8;
+        --body-medium-color: #cbd5e1;
+        --body-loud-color: #f8fafc;
+
+        --breadcrumbs-fg: #94a3b8;
+        --breadcrumbs-link-fg: #93C5FD;
+        --breadcrumbs-bg: #1e293b;
+
+        --link-fg: #93C5FD;
+        --link-hover-color: #BFDBFE;
+        --link-selected-fg: #93C5FD;
+
+        --hairline-color: #1e293b;
+        --border-color: #334155;
+
+        --error-fg: #FCA5A5;
+
+        --message-info-bg: #1e3a8a;
+        --message-success-bg: #14532d;
+        --message-warning-bg: #713f12;
+        --message-error-bg: #7f1d1d;
+
+        --darkened-bg: #1e293b;
+        --selected-bg: #1e293b;
+        --selected-row: #172554;
+
+        --close-button-bg: #334155;
+        --close-button-hover-bg: #475569;
+
+        color-scheme: dark;
+    }
+}
+
+html[data-theme="dark"] {
+    --primary: #162D63;
+    --primary-fg: #f8fafc;
+
+    --body-fg: #e2e8f0;
+    --body-bg: #0f172a;
+    --body-quiet-color: #94a3b8;
+    --body-medium-color: #cbd5e1;
+    --body-loud-color: #f8fafc;
+
+    --breadcrumbs-fg: #94a3b8;
+    --breadcrumbs-link-fg: #93C5FD;
+    --breadcrumbs-bg: #1e293b;
+
+    --link-fg: #93C5FD;
+    --link-hover-color: #BFDBFE;
+    --link-selected-fg: #93C5FD;
+
+    --hairline-color: #1e293b;
+    --border-color: #334155;
+
+    --error-fg: #FCA5A5;
+
+    --message-info-bg: #1e3a8a;
+    --message-success-bg: #14532d;
+    --message-warning-bg: #713f12;
+    --message-error-bg: #7f1d1d;
+
+    --darkened-bg: #1e293b;
+    --selected-bg: #1e293b;
+    --selected-row: #172554;
+
+    --close-button-bg: #334155;
+    --close-button-hover-bg: #475569;
+
+    color-scheme: dark;
+}
+
+/* ---------- Cabeçalho (igual à navbar do sistema) ---------- */
+
+#header {
+    padding: 12px 40px;
+    background: var(--header-bg);
+}
+
+#site-name {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 1.25rem;
+    font-weight: 700;
+    letter-spacing: .5px;
+}
+
+#site-name a:link,
+#site-name a:visited {
+    color: var(--header-branding-color);
+}
+
+.marca-admin {
+    font-size: 0.75rem;
+    font-weight: 600;
+    letter-spacing: .3px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.15);
+    color: #ffffff;
+}
+
+#user-tools {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px;
+    font-size: 0.875rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+#user-tools .ola {
+    color: rgba(255, 255, 255, 0.6);
+    margin-right: 4px;
+}
+
+#user-tools .ola strong {
+    color: rgba(255, 255, 255, 0.85);
+    font-weight: 600;
+}
+
+/* Links do cabeçalho como os btn-outline-light btn-sm da navbar */
+#user-tools a.botao-cabecalho,
+#logout-form button.botao-cabecalho {
+    display: inline-block;
+    padding: 4px 10px;
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    border-radius: 6px;
+    color: #ffffff;
+    font-size: 0.8125rem;
+    font-weight: 400;
+    letter-spacing: 0;
+    text-transform: none;
+    line-height: 1.4;
+    text-decoration: none;
+    margin: 0;
+}
+
+#user-tools a.botao-cabecalho:hover,
+#user-tools a.botao-cabecalho:focus,
+#logout-form button.botao-cabecalho:hover,
+#logout-form button.botao-cabecalho:focus {
+    background: #ffffff;
+    color: #162D63;
+    border-color: #ffffff;
+    text-decoration: none;
+    margin: 0;
+}
+
+#header .theme-toggle {
+    margin-left: 4px;
+}
+
+#header .theme-toggle svg {
+    fill: #ffffff;
+}
+
+/* ---------- Trilha (breadcrumbs) ---------- */
+
+div.breadcrumbs {
+    font-size: 0.875rem;
+}
+
+div.breadcrumbs a {
+    text-decoration: none;
+}
+
+div.breadcrumbs a:hover,
+div.breadcrumbs a:focus {
+    color: var(--link-hover-color);
+    text-decoration: underline;
+}
+
+/* ---------- Botões e campos ---------- */
+
+.button,
+input[type=submit],
+input[type=button],
+.submit-row input,
+a.button,
+.object-tools a {
+    border-radius: 6px;
+}
+
+.object-tools a:link,
+.object-tools a:visited {
+    font-weight: 600;
+}
+
+input[type=text], input[type=password], input[type=email],
+input[type=url], input[type=number], input[type=tel], input[type=search],
+textarea, select, .vTextField {
+    border-radius: 6px;
+}
+
+input:focus, textarea:focus, select:focus {
+    outline: 2px solid rgba(37, 99, 235, 0.35);
+    outline-offset: 0;
+    border-color: #2563EB;
+}
+
+/* Títulos das seções (cabeçalho azul dos módulos) com cantos arredondados */
+.module {
+    border-radius: 8px;
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+    border-radius: 8px 8px 0 0;
+    font-weight: 600;
+    letter-spacing: .3px;
+}
+
+/* ---------- Login do admin (mesmo formato do login do sistema) ---------- */
+
+.login {
+    background: var(--darkened-bg);
+}
+
+.login #container {
+    border: 0;
+    border-radius: 10px;
+    box-shadow: 0 .125rem .25rem rgba(0, 0, 0, .075);
+    width: 26em;
+    max-width: calc(100% - 32px);
+}
+
+.login #header {
+    padding: 20px 16px;
+}
+
+.login #site-name {
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.login #content {
+    padding: 24px;
+}
+
+.login .form-row #id_username,
+.login .form-row #id_password {
+    padding: 10px 12px;
+}
+
+.login .submit-row input {
+    width: 100%;
+    padding: 10px 15px;
+    font-size: 1rem;
+    background: var(--default-button-bg);
+}
+
+.login .submit-row input:hover,
+.login .submit-row input:focus {
+    background: var(--default-button-hover-bg);
+}
