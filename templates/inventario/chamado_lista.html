@@ -158,7 +158,7 @@
           <th>Máquina</th>
           <th>O que deve ser feito</th>
           <th>Técnico</th>
-          <th>Encerramento</th>
+          <th>Status</th>
           <th>Tempo</th>
           <th></th>
         </tr>
@@ -199,10 +199,10 @@
             <span class="desc-completa">{{ c.descricao }}</span>
           </td>
           <td class="cel-tecnico" data-label="Técnico">{% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}—{% endif %}</td>
-          <td class="cel-status text-nowrap" data-label="{% if c.encerrado %}Encerramento{% else %}Status{% endif %}">
+          <td class="cel-status text-nowrap" data-label="Status">
             {% if c.encerrado %}
-              {{ c.encerrado_em|date:"d/m/Y" }}<br>
-              <span class="text-muted small">{{ c.encerrado_em|date:"H:i" }}</span>
+              <span class="badge" style="background:#16A34A;">Encerrado</span><br>
+              <span class="text-muted small">{{ c.encerrado_em|date:"d/m/Y H:i" }}</span>
             {% else %}
               <span class="badge" style="background:#DC2626;">Aberto</span>
             {% endif %}
