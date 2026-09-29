@@ -83,6 +83,7 @@
     }
 
     #user-tools {
+        justify-content: center;
         font-size: 0.75rem;
         line-height: 1.8;
     }
