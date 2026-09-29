@@ -5,12 +5,29 @@
  * depois dele (templates/admin/base_site.html), então as regras valem por cima.
  */
 
-/* ---------- Tablet e menor (até 1024px) ---------- */
+/* ---------- Listas, em qualquer tela ---------- */
 
-@media (max-width: 1024px) {
+/* O Django marca colunas de data e de cadastro relacionado (Contrato,
+   Equipamento, Cliente) com "nowrap": o nome de um contrato sozinho passava
+   de 470px e a lista de Locações chegava a 1474px, obrigando a arrastar a
+   tela para os lados até no computador. Quebrando linha, a tabela cabe.
+   Os títulos das colunas também quebram ("Início do contrato" em duas
+   linhas), senão eles ditam a largura e espremem as colunas de texto. */
+#changelist #result_list td,
+#changelist #result_list td.nowrap,
+#changelist #result_list tbody th,
+#changelist #result_list thead th,
+#changelist #result_list thead th .text,
+#changelist #result_list thead th .text a {
+    white-space: normal;
+}
 
-    /* Filtros descem para baixo da lista: lado a lado, a tabela ficava com
-       uns 180px de largura em tela de tablet. */
+/* ---------- Telas menores que 1200px ---------- */
+
+@media (max-width: 1199px) {
+
+    /* Filtros descem para baixo da lista: lado a lado, sobravam uns 450px
+       para a tabela numa tela de 1100px. */
     #changelist .changelist-form-container {
         flex-direction: column;
     }
@@ -34,14 +51,11 @@
         flex: 1 1 auto;
         min-width: 0;
     }
+}
 
-    /* Células da lista numa linha só: datas longas ("29 de Setembro de 2026
-       às 08:53") viravam três linhas e cada registro ficava enorme. A
-       tabela já rola de lado dentro de .results. */
-    #result_list td,
-    #result_list th {
-        white-space: nowrap;
-    }
+/* ---------- Tablet e menor (até 1024px) ---------- */
+
+@media (max-width: 1024px) {
 
     /* Inlines em tabela (Manutenções, Locações, Movimentações, Aditivos):
        cada coluna com largura mínima, para rolar de lado em vez de esmagar
@@ -86,6 +100,18 @@
         justify-content: center;
         font-size: 0.75rem;
         line-height: 1.8;
+    }
+
+    /* No celular a tabela rola de lado de qualquer jeito; quebrando linha
+       cada registro ficava com 130 a 200px de altura. Aqui volta a ser uma
+       linha só por registro. */
+    #changelist #result_list td,
+    #changelist #result_list td.nowrap,
+    #changelist #result_list tbody th,
+    #changelist #result_list thead th,
+    #changelist #result_list thead th .text,
+    #changelist #result_list thead th .text a {
+        white-space: nowrap;
     }
 
     /* O Django dá aos campos a largura "100vw - 30px"; onde a barra de
