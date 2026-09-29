@@ -4,12 +4,12 @@
 {% block extrahead %}
 {{ block.super }}
 <script>
-    // Em tela de tablet/celular o menu lateral aberto esmaga a lista. Se a
-    // pessoa ainda não escolheu (nunca clicou no « »), ele começa fechado.
-    // Roda antes do nav_sidebar.js do Django, que lê essa mesma chave.
+    // O menu lateral aberto tira ~275px da lista e obriga a arrastar a tabela
+    // para os lados, até no computador. Se a pessoa ainda não escolheu
+    // (nunca clicou no « »), ele começa fechado. Roda antes do
+    // nav_sidebar.js do Django, que lê essa mesma chave.
     try {
-        if (window.innerWidth <= 1024 &&
-                localStorage.getItem('django.admin.navSidebarIsOpen') === null) {
+        if (localStorage.getItem('django.admin.navSidebarIsOpen') === null) {
             localStorage.setItem('django.admin.navSidebarIsOpen', 'false');
         }
     } catch (e) {}
