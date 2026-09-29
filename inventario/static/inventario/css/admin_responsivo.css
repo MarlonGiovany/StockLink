@@ -1,0 +1,113 @@
+/* Ajustes de responsividade do /admin/ do StockLink.
+ *
+ * O responsive.css do Django já impede a página de vazar para os lados; aqui
+ * ficam só os pontos que ele deixa apertados em tablet e celular. Carregado
+ * depois dele (templates/admin/base_site.html), então as regras valem por cima.
+ */
+
+/* ---------- Tablet e menor (até 1024px) ---------- */
+
+@media (max-width: 1024px) {
+
+    /* Filtros descem para baixo da lista: lado a lado, a tabela ficava com
+       uns 180px de largura em tela de tablet. */
+    #changelist .changelist-form-container {
+        flex-direction: column;
+    }
+
+    #changelist .changelist-form-container:has(#changelist-filter) > div {
+        max-width: 100%;
+        width: 100%;
+    }
+
+    #changelist-filter {
+        width: 100%;
+        margin: 30px 0 0;
+    }
+
+    /* Busca ocupa a largura disponível em vez de ficar num campinho */
+    #changelist-search > div {
+        flex-wrap: nowrap;
+    }
+
+    #changelist-search #searchbar {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    /* Células da lista numa linha só: datas longas ("29 de Setembro de 2026
+       às 08:53") viravam três linhas e cada registro ficava enorme. A
+       tabela já rola de lado dentro de .results. */
+    #result_list td,
+    #result_list th {
+        white-space: nowrap;
+    }
+
+    /* Inlines em tabela (Manutenções, Locações, Movimentações, Aditivos):
+       cada coluna com largura mínima, para rolar de lado em vez de esmagar
+       texto e campos. */
+    .inline-group .tabular td,
+    .inline-group .tabular th {
+        min-width: 7rem;
+    }
+
+    .inline-group .tabular td.field-descricao,
+    .inline-group .tabular td.field-realizado {
+        min-width: 16rem;
+    }
+
+    .inline-group .tabular td.delete,
+    .inline-group .tabular th.column-delete,
+    .inline-group .tabular td.original,
+    .inline-group .tabular th.original {
+        min-width: 0;
+    }
+
+    .inline-group .tabular textarea {
+        width: 100%;
+        box-sizing: border-box;
+    }
+}
+
+/* ---------- Celular (até 767px) ---------- */
+
+@media (max-width: 767px) {
+
+    /* Cabeçalho mais enxuto */
+    #header {
+        padding: 12px 16px;
+    }
+
+    #site-name {
+        font-size: 1.25rem;
+    }
+
+    #user-tools {
+        font-size: 0.75rem;
+        line-height: 1.8;
+    }
+
+    /* O Django dá aos campos a largura "100vw - 30px"; onde a barra de
+       rolagem ocupa espaço, isso passa da borda e corta os ícones
+       (editar/adicionar/remover/ver) ao lado dos selects. */
+    .aligned .form-row > div {
+        max-width: 100%;
+    }
+
+    /* Alvos de toque maiores nos filtros e na navegação por data */
+    #changelist-filter li a {
+        display: inline-block;
+        padding: 6px 0;
+    }
+
+    .xfull ul.toplinks li,
+    ul.toplinks li {
+        margin-bottom: 6px;
+    }
+
+    .paginator a,
+    .paginator .this-page {
+        display: inline-block;
+        padding: 6px 8px;
+    }
+}
