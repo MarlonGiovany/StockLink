@@ -1,0 +1,23 @@
+{% extends "admin/base_site.html" %}
+{% load static %}
+
+{% block extrahead %}
+{{ block.super }}
+<script>
+    // Em tela de tablet/celular o menu lateral aberto esmaga a lista. Se a
+    // pessoa ainda não escolheu (nunca clicou no « »), ele começa fechado.
+    // Roda antes do nav_sidebar.js do Django, que lê essa mesma chave.
+    try {
+        if (window.innerWidth <= 1024 &&
+                localStorage.getItem('django.admin.navSidebarIsOpen') === null) {
+            localStorage.setItem('django.admin.navSidebarIsOpen', 'false');
+        }
+    } catch (e) {}
+</script>
+{% endblock %}
+
+{% block responsive %}
+{{ block.super }}
+{# Depois do responsive.css do Django, para as nossas regras valerem por cima #}
+<link rel="stylesheet" href="{% static 'inventario/css/admin_responsivo.css' %}">
+{% endblock %}
