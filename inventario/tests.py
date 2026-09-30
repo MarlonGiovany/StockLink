@@ -2467,3 +2467,144 @@ class AvisoDeClienteParecidoTests(BaseLogada):
             self.dados(nome="GUIMA LTDA", documento="98.765.432/0001-10"),
         )
         self.assertRedirects(resposta, reverse("cliente_detalhe", args=[self.guima.pk]))
+
+
+class PlanilhasTests(BaseComPerfis):
+    """Planilhas em Excel: máquinas locadas por cliente e estoque."""
+
+    def linhas(self, resposta):
+        from openpyxl import load_workbook
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("attachment;", resposta["Content-Disposition"])
+        folha = load_workbook(io.BytesIO(resposta.content)).active
+        return [list(l) for l in folha.iter_rows(values_only=True)]
+
+    def test_maquinas_locadas_uma_linha_por_maquina(self):
+        contrato = Contrato.objects.create(numero="55", cliente=self.cliente)
+        Locacao.objects.filter(equipamento=self.maquina).update(contrato=contrato)
+        linhas = self.linhas(self.client.get(reverse("planilha_maquinas_locadas")))
+        self.assertEqual(linhas[0][0], "Cliente")
+        self.assertEqual(linhas[0][-1], "Contrato")
+        dados = {l[2]: l for l in linhas[1:]}
+        self.assertEqual(set(dados), {"INF-1002", "INF-1003"})
+        self.assertEqual(dados["INF-1002"][0], "RODOVIÁRIO")
+        self.assertEqual(dados["INF-1002"][9], 250)       # número, não texto
+        self.assertEqual(dados["INF-1002"][-1], "55")
+
+    def test_so_de_um_cliente(self):
+        linhas = self.linhas(self.client.get(
+            reverse("planilha_maquinas_locadas"), {"cliente": self.outro_cliente.pk}
+        ))
+        self.assertEqual([l[2] for l in linhas[1:]], ["INF-1003"])
+
+    def test_devolvida_nao_entra(self):
+        Locacao.objects.filter(equipamento=self.maquina).update(ativa=False)
+        linhas = self.linhas(self.client.get(reverse("planilha_maquinas_locadas")))
+        self.assertEqual([l[2] for l in linhas[1:]], ["INF-1003"])
+
+    def test_sem_acesso_a_contratos_nao_ve_a_coluna(self):
+        self.client.force_login(self.tecnico)
+        linhas = self.linhas(self.client.get(reverse("planilha_maquinas_locadas")))
+        self.assertNotIn("Contrato", linhas[0])
+
+    def test_botoes_nas_telas(self):
+        # Na lista: um ⬇ por cliente com máquina locada, nenhum geral no topo
+        vazio = Cliente.objects.create(nome="SEM MÁQUINA")
+        lista = self.client.get(reverse("cliente_lista"))
+        url = reverse("planilha_maquinas_locadas")
+        self.assertContains(lista, f"{url}?cliente={self.cliente.pk}")
+        self.assertContains(lista, f"{url}?cliente={self.outro_cliente.pk}")
+        self.assertNotContains(lista, f"{url}?cliente={vazio.pk}")
+        self.assertNotContains(lista, f'href="{url}"')
+        self.assertContains(
+            self.client.get(reverse("cliente_detalhe", args=[self.cliente.pk])),
+            f'{reverse("planilha_maquinas_locadas")}?cliente={self.cliente.pk}',
+        )
+
+    def test_precisa_estar_logado(self):
+        self.client.logout()
+        resposta = self.client.get(reverse("planilha_equipamentos"), {"status": "LOCADO"})
+        self.assertEqual(resposta.status_code, 302)
+        self.assertIn(reverse("login"), resposta["Location"])
+
+
+class ExcelDaListaDeEquipamentosTests(BaseComPerfis):
+    """O "Baixar Excel" da lista de equipamentos segue o filtro da tela."""
+
+    def setUp(self):
+        super().setUp()
+        # As locadas de BaseComChamado ficam com status Locado, como no sistema
+        Equipamento.objects.filter(numero_patrimonio__in=["1002", "1003"]).update(
+            status=Equipamento.Status.LOCADO
+        )
+        Equipamento.objects.create(marca="EPSON", modelo="L3250", numero_patrimonio="1004",
+                                   status=Equipamento.Status.BAIXADO)
+
+    def baixa(self, **filtros):
+        return self.client.get(reverse("planilha_equipamentos"), filtros)
+
+    def linhas(self, resposta):
+        from openpyxl import load_workbook
+        self.assertEqual(resposta.status_code, 200)
+        folha = load_workbook(io.BytesIO(resposta.content)).active
+        return [list(l) for l in folha.iter_rows(values_only=True)]
+
+    def test_botao_so_aparece_com_situacao_escolhida(self):
+        url = reverse("equipamento_lista")
+        self.assertNotContains(self.client.get(url, {"produto": "todos"}), "Baixar Excel")
+        resposta = self.client.get(url, {"produto": "todos", "status": "DISPONIVEL"})
+        self.assertContains(resposta, "Baixar Excel")
+        self.assertContains(resposta, f'{reverse("planilha_equipamentos")}?produto=todos&amp;status=DISPONIVEL')
+
+    def test_cada_situacao_baixa_so_as_suas(self):
+        casos = {"DISPONIVEL": ["INF-1001"], "LOCADO": ["INF-1002", "INF-1003"],
+                 "BAIXADO": ["INF-1004"]}
+        for status, esperado in casos.items():
+            with self.subTest(status=status):
+                linhas = self.linhas(self.baixa(produto="todos", status=status))
+                self.assertEqual(sorted(l[0] for l in linhas[1:]), esperado)
+
+    def test_locadas_trazem_cliente_e_contrato(self):
+        contrato = Contrato.objects.create(numero="55", cliente=self.cliente)
+        Locacao.objects.filter(equipamento=self.maquina).update(contrato=contrato)
+        linhas = self.linhas(self.baixa(produto="todos", status="LOCADO"))
+        cab = linhas[0]
+        linha = next(l for l in linhas[1:] if l[0] == "INF-1002")
+        self.assertEqual(linha[cab.index("Cliente")], "RODOVIÁRIO")
+        self.assertEqual(linha[cab.index("Contrato")], "55")
+        self.assertEqual(linha[cab.index("Valor da locação")], 250)
+
+    def test_outras_situacoes_sem_colunas_de_locacao(self):
+        cab = self.linhas(self.baixa(produto="todos", status="DISPONIVEL"))[0]
+        self.assertNotIn("Cliente", cab)
+        self.assertIn("Marca", cab)
+        self.assertIn("Nº de série", cab)
+
+    def test_tecnico_nao_ve_contrato(self):
+        self.client.force_login(self.tecnico)
+        cab = self.linhas(self.baixa(produto="todos", status="LOCADO"))[0]
+        self.assertIn("Cliente", cab)
+        self.assertNotIn("Contrato", cab)
+
+    def test_respeita_busca_e_produto(self):
+        linhas = self.linhas(self.baixa(produto=self.impressora.pk, status="LOCADO", q="samsung"))
+        self.assertEqual([l[0] for l in linhas[1:]], ["INF-1003"])
+
+    def test_vazio_avisa_e_nao_gera_arquivo(self):
+        resposta = self.baixa(produto="todos", status="MANUTENCAO")
+        self.assertEqual(resposta.status_code, 302)
+        self.assertNotIn("Content-Disposition", resposta)
+        resposta = self.client.get(resposta["Location"])
+        self.assertContains(resposta, "Nenhum arquivo foi gerado")
+
+    def test_sem_situacao_nao_baixa(self):
+        resposta = self.baixa(produto="todos")
+        self.assertEqual(resposta.status_code, 302)
+        self.assertNotIn("Content-Disposition", resposta)
+
+    def test_ficha_tecnica_so_quando_existe(self):
+        cab = self.linhas(self.baixa(produto="todos", status="BAIXADO"))[0]
+        self.assertNotIn("Processador", cab)
+        Equipamento.objects.filter(numero_patrimonio="1004").update(processador="i5")
+        cab = self.linhas(self.baixa(produto="todos", status="BAIXADO"))[0]
+        self.assertIn("Processador", cab)

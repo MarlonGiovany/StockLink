@@ -27,7 +27,7 @@
 <form method="get" class="row g-2 mb-3">
   <input type="hidden" name="produto" value="{{ produto_param }}">
   {% if cliente_atual %}<input type="hidden" name="cliente" value="{{ cliente_atual.pk }}">{% endif %}
-  <div class="col-md-7">
+  <div class="{% if status_atual %}col-md-5{% else %}col-md-7{% endif %}">
     <input type="text" name="q" value="{{ termo }}" class="form-control"
            placeholder="Buscar por marca, modelo, série, INF ou local...">
   </div>
@@ -42,6 +42,13 @@
   <div class="col-md-2">
     <button class="btn btn-primary w-100">Filtrar</button>
   </div>
+  {# Só com uma situação escolhida; baixa exatamente o recorte desta tela #}
+  {% if status_atual %}
+  <div class="col-md-2">
+    <a href="{% url 'planilha_equipamentos' %}?{{ request.GET.urlencode }}"
+       class="btn btn-excel w-100" title="Baixar em Excel os equipamentos desta lista">{% include "inventario/_icone_baixar.html" %} Baixar Excel</a>
+  </div>
+  {% endif %}
 </form>
 
 <div class="card shadow-sm">
