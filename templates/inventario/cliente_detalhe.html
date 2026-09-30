@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block titulo %}{{ cliente.nome }} — {{ nome_sistema }}{% endblock %}
+{% block conteudo %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <a href="{% url 'cliente_lista' %}" class="text-muted text-decoration-none">&larr; Clientes</a>
+    <h4 class="mb-0 mt-1">{{ cliente.nome }}</h4>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    {% if perms.inventario.change_cliente %}
+    <a href="{% url 'cliente_editar' cliente.pk %}" class="btn btn-outline-primary">Editar</a>
+    {% endif %}
+    {% if perms.inventario.delete_cliente %}
+    <a href="{% url 'cliente_excluir' cliente.pk %}" class="btn btn-outline-danger">Excluir</a>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card shadow-sm mb-3"><div class="card-body">
+  <dl class="row mb-0">
+    <dt class="col-sm-3">CPF/CNPJ</dt><dd class="col-sm-9">{{ cliente.documento|default:"—" }}</dd>
+    <dt class="col-sm-3">Telefone</dt><dd class="col-sm-9">{{ cliente.telefone|default:"—" }}</dd>
+    <dt class="col-sm-3">E-mail</dt><dd class="col-sm-9">{{ cliente.email|default:"—" }}</dd>
+    <dt class="col-sm-3">Endereço</dt><dd class="col-sm-9">{{ cliente.endereco|default:"—" }}</dd>
+    {% if cliente.observacoes %}
+    <dt class="col-sm-3">Observações</dt><dd class="col-sm-9">{{ cliente.observacoes|linebreaksbr }}</dd>
+    {% endif %}
+  </dl>
+</div></div>
+
+<h5 class="mb-2">Máquinas locadas hoje <span class="text-muted fs-6">({{ vinculos.locacoes_ativas }})</span></h5>
+<div class="card shadow-sm mb-3"><div class="table-responsive">
+  <table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>Máquina</th><th>Início</th><th class="text-end">Valor</th>{% if pode_ver_contratos %}<th>Contrato</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for l in locacoes_ativas %}
+      <tr>
+        <td><a href="{% url 'equipamento_detalhe' l.equipamento.pk %}" class="text-decoration-none">INF-{{ l.equipamento.numero_patrimonio }}</a>
+          <span class="text-muted small">{{ l.equipamento.marca }} {{ l.equipamento.modelo }}</span></td>
+        <td class="text-nowrap">{{ l.data_inicio|date:"d/m/Y" }}</td>
+        <td class="text-end text-nowrap">R$ {{ l.valor }}</td>
+        {% if pode_ver_contratos %}
+        <td>{% if l.contrato %}<a href="{% url 'contrato_detalhe' l.contrato.pk %}" class="text-decoration-none">Nº {{ l.contrato.numero }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        {% endif %}
+      </tr>
+      {% empty %}
+      <tr><td colspan="4" class="text-center text-muted py-3">Nenhuma máquina locada no momento.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% if vinculos.locacoes_encerradas %}
+<p class="small text-muted">Mais {{ vinculos.locacoes_encerradas }} locação(ões) já encerrada(s) no histórico.</p>
+{% endif %}
+
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 class="mb-0">Últimos chamados</h5>
+  {% if chamados %}
+  <a href="{% url 'chamado_lista' %}?cliente={{ cliente.pk }}&status=" class="small text-decoration-none">Ver todos &rarr;</a>
+  {% endif %}
+</div>
+<div class="card shadow-sm"><div class="table-responsive">
+  <table class="table table-hover mb-0">
+    <thead class="table-light"><tr><th>OS</th><th>Abertura</th><th>Máquina</th><th>Técnico</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for c in chamados %}
+      <tr>
+        <td><a href="{% url 'chamado_detalhe' c.pk %}" class="fw-bold text-decoration-none">{{ c.numero_os }}</a></td>
+        <td class="text-nowrap">{{ c.aberto_em|date:"d/m/Y H:i" }}</td>
+        <td>INF-{{ c.equipamento.numero_patrimonio }}</td>
+        <td>{% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}—{% endif %}</td>
+        <td>{% if c.encerrado %}<span class="badge" style="background:#16A34A;">Encerrado</span>{% else %}<span class="badge" style="background:#DC2626;">Aberto</span>{% endif %}</td>
+      </tr>
+      {% empty %}
+      <tr><td colspan="5" class="text-center text-muted py-3">Nenhum chamado para este cliente.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div></div>
+{% endblock %}
