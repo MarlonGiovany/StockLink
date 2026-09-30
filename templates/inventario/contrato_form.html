@@ -11,6 +11,9 @@
         para <strong>{{ locacao.cliente }}</strong>. Cliente e título já vêm preenchidos.
       </div>
     {% endif %}
+    {% if form.non_field_errors %}
+      <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+    {% endif %}
     <div class="card shadow-sm"><div class="card-body">
       <form method="post" enctype="multipart/form-data" novalidate
             action="{% if contrato %}{% url 'contrato_editar' contrato.pk %}{% else %}{% url 'contrato_novo' %}{% if locacao %}?locacao={{ locacao.pk }}{% endif %}{% endif %}">
