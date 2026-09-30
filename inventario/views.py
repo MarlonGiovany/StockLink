@@ -11,11 +11,14 @@ from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
-from django.http import FileResponse, Http404, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
 from django.utils import timezone
+from django.utils.text import slugify
+
+from . import planilhas
 
 from .forms import (
     AditivoEdicaoForm,
@@ -55,6 +58,7 @@ from .permissoes import (
     eh_analista,
     exige_area,
     perfil_do_usuario,
+    pode_ver_contratos,
     usuario_analista,
     ve_todos_os_chamados,
 )
@@ -96,6 +100,27 @@ def equipamento_lista(request):
             },
         )
 
+    equipamentos, filtros = _equipamentos_filtrados(request)
+    contexto = {
+        "equipamentos": equipamentos,
+        "status_choices": Equipamento.Status.choices,
+        "total": equipamentos.count(),
+    }
+    contexto.update(filtros)
+    return render(request, "inventario/equipamento_lista.html", contexto)
+
+
+def _equipamentos_filtrados(request):
+    """Os filtros da lista de equipamentos: produto, busca, status e cliente.
+
+    Fica separado porque o "Baixar Excel" usa exatamente o mesmo recorte — a
+    planilha nunca pode trazer algo diferente do que a pessoa está vendo.
+    """
+    termo = request.GET.get("q", "").strip()
+    status = request.GET.get("status", "").strip()
+    produto_param = request.GET.get("produto", "").strip()
+    cliente_param = request.GET.get("cliente", "").strip()
+
     equipamentos = Equipamento.objects.select_related("produto")
     produto_atual = None
     if produto_param == "sem":
@@ -124,17 +149,13 @@ def equipamento_lista(request):
             locacoes__cliente=cliente_atual, locacoes__ativa=True
         ).distinct()
 
-    contexto = {
-        "equipamentos": equipamentos,
+    return equipamentos, {
         "termo": termo,
         "status_atual": status,
-        "status_choices": Equipamento.Status.choices,
-        "total": equipamentos.count(),
         "produto_atual": produto_atual,
         "produto_param": produto_param,
         "cliente_atual": cliente_atual,
     }
-    return render(request, "inventario/equipamento_lista.html", contexto)
 
 
 @login_required
@@ -1892,3 +1913,61 @@ def chamado_historico(request):
     contexto = {"linhas": linhas, "total": chamados.count()}
     contexto.update(filtros)
     return render(request, "inventario/chamado_historico.html", contexto)
+
+
+# ----- Planilhas em Excel -----
+
+def _entrega_planilha(livro, nome):
+    resposta = HttpResponse(
+        planilhas.em_bytes(livro),
+        content_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
+    hoje = timezone.localdate().strftime("%Y-%m-%d")
+    resposta["Content-Disposition"] = f'attachment; filename="{nome}-{hoje}.xlsx"'
+    return resposta
+
+
+@login_required
+def planilha_maquinas_locadas(request):
+    """Todas as máquinas locadas hoje, ou só as de um cliente (?cliente=)."""
+    cliente = None
+    if request.GET.get("cliente", "").isdigit():
+        cliente = get_object_or_404(Cliente, pk=request.GET["cliente"])
+    livro = planilhas.maquinas_locadas(
+        cliente=cliente, com_contrato=pode_ver_contratos(request.user)
+    )
+    nome = "maquinas-locadas"
+    if cliente:
+        nome += "-" + slugify(cliente.nome)
+    return _entrega_planilha(livro, nome)
+
+
+@login_required
+def planilha_equipamentos(request):
+    """O "Baixar Excel" da lista de equipamentos: o mesmo recorte da tela.
+
+    Só existe com uma situação escolhida (Disponível, Locado, Em manutenção
+    ou Baixado). Se o filtro não trouxer nenhuma máquina, volta para a tela
+    avisando, em vez de entregar uma planilha vazia.
+    """
+    equipamentos, filtros = _equipamentos_filtrados(request)
+    status = filtros["status_atual"]
+    rotulos = dict(Equipamento.Status.choices)
+    voltar = f"{reverse('equipamento_lista')}?{request.GET.urlencode()}"
+    if status not in rotulos:
+        messages.info(request, "Escolha uma situação para baixar o Excel.")
+        return redirect(voltar)
+    if not equipamentos.exists():
+        messages.info(
+            request,
+            f"Nenhum equipamento com a situação {rotulos[status]} neste filtro. "
+            f"Nenhum arquivo foi gerado.",
+        )
+        return redirect(voltar)
+
+    livro = planilhas.equipamentos(
+        equipamentos, titulo=rotulos[status],
+        com_locacao=status == Equipamento.Status.LOCADO,
+        com_contrato=pode_ver_contratos(request.user),
+    )
+    return _entrega_planilha(livro, f"equipamentos-{slugify(rotulos[status])}")

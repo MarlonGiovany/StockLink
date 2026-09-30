@@ -28,7 +28,12 @@
   </dl>
 </div></div>
 
-<h5 class="mb-2">Máquinas locadas hoje <span class="text-muted fs-6">({{ vinculos.locacoes_ativas }})</span></h5>
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 class="mb-0">Máquinas locadas hoje <span class="text-muted fs-6">({{ vinculos.locacoes_ativas }})</span></h5>
+  {% if vinculos.locacoes_ativas %}
+  <a href="{% url 'planilha_maquinas_locadas' %}?cliente={{ cliente.pk }}" class="btn btn-sm btn-excel">{% include "inventario/_icone_baixar.html" %} Excel</a>
+  {% endif %}
+</div>
 <div class="card shadow-sm mb-3"><div class="table-responsive">
   <table class="table table-hover mb-0">
     <thead class="table-light"><tr><th>Máquina</th><th>Início</th><th class="text-end">Valor</th>{% if pode_ver_contratos %}<th>Contrato</th>{% endif %}</tr></thead>

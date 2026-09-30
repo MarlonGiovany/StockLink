@@ -25,6 +25,12 @@ urlpatterns = [
     path("clientes/<int:pk>/editar/", views.cliente_editar, name="cliente_editar"),
     path("clientes/<int:pk>/excluir/", views.cliente_excluir, name="cliente_excluir"),
 
+    # Planilhas em Excel
+    path("planilhas/maquinas-locadas/", views.planilha_maquinas_locadas,
+         name="planilha_maquinas_locadas"),
+    path("planilhas/equipamentos/", views.planilha_equipamentos,
+         name="planilha_equipamentos"),
+
     path("contratos/", views.contrato_lista, name="contrato_lista"),
     path("contratos/novo/", views.contrato_novo, name="contrato_novo"),
     path("contratos/<int:pk>/", views.contrato_detalhe, name="contrato_detalhe"),
