@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block titulo %}Excluir fornecedor — {{ nome_sistema }}{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm border-danger"><div class="card-body">
+      <h5 class="text-danger">Excluir fornecedor</h5>
+      <p>Tem certeza que deseja remover <strong>{{ fornecedor.nome }}</strong>?
+         Esta ação não pode ser desfeita.</p>
+      {% if maquinas %}
+      <p class="text-muted">{{ maquinas }} máquina(s) foram compradas dele e vão
+         ficar sem fornecedor anotado. O resto da ficha delas não muda.</p>
+      {% endif %}
+      <form method="post" class="d-flex flex-wrap gap-2">
+        {% csrf_token %}
+        <button class="btn btn-danger">Sim, excluir</button>
+        <a href="{% url 'fornecedor_editar' fornecedor.pk %}" class="btn btn-outline-secondary">Cancelar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

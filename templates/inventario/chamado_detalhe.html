@@ -14,6 +14,9 @@
        class="btn text-white d-none d-lg-inline-block" style="background:#162D63;">
       🖨️ Imprimir OS
     </a>
+    {% if perms.inventario.add_chamado %}
+    <a href="{% url 'chamado_editar' chamado.pk %}" class="btn btn-outline-primary d-none d-lg-inline-block">✏️ Editar</a>
+    {% endif %}
     {% if chamado.tecnico_id == user.pk %}
       <span class="badge fs-6 selo-minha-os">Sua OS</span>
     {% endif %}
@@ -30,9 +33,12 @@
 </div>
 
 {# Celular: as ações principais logo no topo, sem precisar rolar até elas #}
-<div class="d-flex gap-2 mb-3 d-lg-none">
+<div class="d-flex flex-wrap gap-2 mb-3 d-lg-none">
   <a href="{% url 'chamado_imprimir' chamado.pk %}" target="_blank"
      class="btn text-white flex-fill" style="background:#162D63;">🖨️ Imprimir</a>
+  {% if perms.inventario.add_chamado %}
+    <a href="{% url 'chamado_editar' chamado.pk %}" class="btn btn-outline-primary flex-fill">✏️ Editar</a>
+  {% endif %}
   {% if pode_encerrar and not chamado.encerrado %}
     <a href="#execucao" class="btn text-white flex-fill" style="background:#16A34A;">✔ Encerrar</a>
   {% endif %}

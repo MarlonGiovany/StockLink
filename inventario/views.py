@@ -22,6 +22,7 @@ from .forms import (
     AditivoForm,
     ChamadoAberturaForm,
     ChamadoAnexoForm,
+    ChamadoEdicaoForm,
     ChamadoEncerramentoForm,
     ClienteForm,
     ContratoForm,
@@ -255,7 +256,7 @@ def produto_novo(request):
 
     return render(
         request, "inventario/cadastro_form.html",
-        {"form": form, "titulo": "Novo produto", "voltar": "equipamento_lista"},
+        {"form": form, "titulo": "Novo produto", "voltar": reverse("equipamento_lista")},
     )
 
 
@@ -493,7 +494,51 @@ def fornecedor_novo(request):
         form = FornecedorForm()
     return render(
         request, "inventario/cadastro_form.html",
-        {"form": form, "titulo": "Novo fornecedor", "voltar": "fornecedor_lista"},
+        {"form": form, "titulo": "Novo fornecedor", "voltar": reverse("fornecedor_lista")},
+    )
+
+
+@login_required
+@permission_required("inventario.change_fornecedor", raise_exception=True)
+def fornecedor_editar(request, pk):
+    fornecedor = get_object_or_404(Fornecedor, pk=pk)
+    if request.method == "POST":
+        form = FornecedorForm(request.POST, instance=fornecedor)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Fornecedor atualizado.")
+            return redirect("fornecedor_lista")
+    else:
+        form = FornecedorForm(instance=fornecedor)
+    return render(
+        request, "inventario/cadastro_form.html",
+        {
+            "form": form,
+            "titulo": f"Editar fornecedor — {fornecedor}",
+            "voltar": reverse("fornecedor_lista"),
+            "excluir": (
+                reverse("fornecedor_excluir", args=[fornecedor.pk])
+                if request.user.has_perm("inventario.delete_fornecedor") else ""
+            ),
+        },
+    )
+
+
+@login_required
+@permission_required("inventario.delete_fornecedor", raise_exception=True)
+def fornecedor_excluir(request, pk):
+    """Fornecedor não trava nada: as máquinas compradas dele só ficam sem
+    fornecedor anotado (o resto da ficha continua igual)."""
+    fornecedor = get_object_or_404(Fornecedor, pk=pk)
+    maquinas = fornecedor.equipamentos.count()
+    if request.method == "POST":
+        nome = str(fornecedor)
+        fornecedor.delete()
+        messages.success(request, f"Fornecedor '{nome}' removido.")
+        return redirect("fornecedor_lista")
+    return render(
+        request, "inventario/fornecedor_excluir.html",
+        {"fornecedor": fornecedor, "maquinas": maquinas},
     )
 
 
@@ -538,7 +583,134 @@ def cliente_novo(request):
         form = ClienteForm()
     return render(
         request, "inventario/cadastro_form.html",
-        {"form": form, "titulo": "Novo cliente", "voltar": "cliente_lista"},
+        {"form": form, "titulo": "Novo cliente", "voltar": reverse("cliente_lista")},
+    )
+
+
+def _vinculos_do_cliente(cliente):
+    """O que está pendurado no cliente — e segura a exclusão dele.
+
+    Locações e chamados são protegidos no banco (não deixam apagar). Contrato
+    deixaria, mas ficaria sem cliente, então segura do mesmo jeito.
+    """
+    return {
+        "locacoes_ativas": cliente.locacoes.filter(ativa=True).count(),
+        "locacoes_encerradas": cliente.locacoes.filter(ativa=False).count(),
+        "chamados": cliente.chamados.count(),
+        "contratos": cliente.contratos.count(),
+    }
+
+
+@login_required
+def cliente_detalhe(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+    return render(
+        request, "inventario/cliente_detalhe.html",
+        {
+            "cliente": cliente,
+            "locacoes_ativas": cliente.locacoes.filter(ativa=True)
+                .select_related("equipamento", "equipamento__produto", "contrato")
+                .order_by("equipamento__numero_patrimonio"),
+            "vinculos": _vinculos_do_cliente(cliente),
+            "chamados": _chamados_visiveis(request.user)
+                .filter(cliente=cliente)
+                .select_related("equipamento", "tecnico")[:10],
+        },
+    )
+
+
+@login_required
+@permission_required("inventario.change_cliente", raise_exception=True)
+def cliente_editar(request, pk):
+    cliente = get_object_or_404(Cliente, pk=pk)
+    if request.method == "POST":
+        form = ClienteForm(request.POST, instance=cliente)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Cliente atualizado.")
+            return redirect("cliente_detalhe", pk=cliente.pk)
+    else:
+        form = ClienteForm(instance=cliente)
+    return render(
+        request, "inventario/cadastro_form.html",
+        {
+            "form": form,
+            "titulo": f"Editar cliente — {cliente}",
+            "voltar": reverse("cliente_detalhe", args=[cliente.pk]),
+        },
+    )
+
+
+@login_required
+@permission_required("inventario.delete_cliente", raise_exception=True)
+def cliente_excluir(request, pk):
+    """Exclui o cliente — ou, se ele tem histórico, transfere tudo para outro.
+
+    Cliente sem nada pendurado sai direto. Com locação, chamado ou contrato,
+    a exclusão simples é recusada e a tela oferece a saída que resolve o
+    caso comum (cadastro duplicado ou feito no nome errado): passar
+    locações, chamados e contratos para o cliente certo e só então apagar
+    este. Nada do histórico se perde e o número das OS não muda.
+    """
+    cliente = get_object_or_404(Cliente, pk=pk)
+    vinculos = _vinculos_do_cliente(cliente)
+    tem_vinculo = any(vinculos.values())
+    outros = sorted(
+        Cliente.objects.exclude(pk=cliente.pk),
+        key=lambda c: _chave_alfabetica(c.nome),
+    )
+
+    if request.method == "POST":
+        destino_id = request.POST.get("destino", "").strip()
+        if destino_id:
+            destino = get_object_or_404(
+                Cliente.objects.exclude(pk=cliente.pk), pk=destino_id
+            )
+            nome = str(cliente)
+            with transaction.atomic():
+                maquinas = Equipamento.objects.filter(
+                    locacoes__cliente=cliente
+                ).distinct()
+                for equipamento in maquinas:
+                    registrar_movimentacao(
+                        equipamento, Movimentacao.Tipo.LOCACAO,
+                        f"Cadastro do cliente {nome} unificado em {destino}: "
+                        f"as locações passaram para {destino}.",
+                        request.user,
+                    )
+                cliente.locacoes.update(cliente=destino)
+                cliente.chamados.update(cliente=destino)
+                cliente.contratos.update(cliente=destino)
+                cliente.delete()
+            messages.success(
+                request,
+                f"Cliente '{nome}' removido. Tudo o que era dele passou para "
+                f"{destino}.",
+            )
+            return redirect("cliente_detalhe", pk=destino.pk)
+
+        if tem_vinculo:
+            # Revalida no servidor: a tela esconde o botão, mas um POST direto
+            # chegaria aqui e o banco recusaria no meio da exclusão.
+            messages.error(
+                request,
+                f"'{cliente}' ainda tem locações, chamados ou contratos. "
+                f"Escolha para qual cliente transferir antes de excluir.",
+            )
+            return redirect("cliente_excluir", pk=cliente.pk)
+        nome = str(cliente)
+        cliente.delete()
+        messages.success(request, f"Cliente '{nome}' removido.")
+        return redirect("cliente_lista")
+
+    return render(
+        request, "inventario/cliente_excluir.html",
+        {
+            "cliente": cliente,
+            "vinculos": vinculos,
+            "tem_vinculo": tem_vinculo,
+            "outros": outros,
+        },
     )
 
 
@@ -1287,6 +1459,38 @@ def chamado_novo(request):
     else:
         form = ChamadoAberturaForm()
     return render(request, "inventario/chamado_form.html", {"form": form})
+
+
+@login_required
+@permission_required("inventario.add_chamado", raise_exception=True)
+def chamado_editar(request, pk):
+    """Corrige cliente, urgência, descrição, técnico ou quem pediu.
+
+    Fica com quem abre chamado (Recepção), não com o técnico: o técnico só
+    registra o que fez e encerra. A OS continua com o mesmo número.
+    """
+    chamado = get_object_or_404(
+        Chamado.objects.select_related("equipamento", "cliente"), pk=pk
+    )
+    if request.method == "POST":
+        form = ChamadoEdicaoForm(request.POST, instance=chamado)
+        if form.is_valid():
+            form.save()
+            messages.success(
+                request, f"Ordem de Serviço {chamado.numero_os} atualizada."
+            )
+            return redirect("chamado_detalhe", pk=chamado.pk)
+    else:
+        form = ChamadoEdicaoForm(instance=chamado)
+    locacao = chamado.equipamento.locacao_ativa
+    return render(
+        request, "inventario/chamado_editar.html",
+        {
+            "form": form,
+            "chamado": chamado,
+            "dono_atual": locacao.cliente if locacao else None,
+        },
+    )
 
 
 @login_required

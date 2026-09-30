@@ -4,6 +4,7 @@ from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import UploadedFile
+from django.db.models import Q
 from django.urls import reverse
 
 from .models import (
@@ -632,6 +633,36 @@ class ChamadoAberturaForm(BootstrapFormMixin, forms.ModelForm):
                     + (f" — ela está com {dono}." if dono else "."),
                 )
         return dados
+
+
+class ChamadoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
+    """Corrige o que a recepção preencheu ao abrir o chamado.
+
+    A máquina fica de fora de propósito: ela é o próprio assunto da OS, e o
+    número impresso na folha continua o mesmo. Já o cliente pode trocar para
+    qualquer um — é o caso da máquina que foi aberta no cadastro errado e
+    depois passou para o cliente certo.
+    """
+
+    class Meta:
+        model = Chamado
+        fields = ["cliente", "prioridade", "descricao", "tecnico", "solicitante"]
+        widgets = {
+            "descricao": forms.Textarea(attrs={"rows": 4}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["cliente"].queryset = Cliente.objects.order_by("nome")
+        self.fields["cliente"].required = True
+        self.fields["cliente"].empty_label = "— escolha o cliente —"
+        # O técnico já designado continua na lista mesmo que tenha sido
+        # desativado depois — senão o formulário não salvaria sem trocá-lo.
+        self.fields["tecnico"].queryset = get_user_model().objects.filter(
+            Q(is_active=True) | Q(pk=self.instance.tecnico_id)
+        ).order_by("username")
+        self.fields["tecnico"].required = True
+        self.fields["tecnico"].empty_label = "— escolha o técnico —"
 
 
 # Formatos aceitos na digitalização da OS: o scanner da recepção costuma

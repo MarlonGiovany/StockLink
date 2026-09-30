@@ -17,8 +17,13 @@ urlpatterns = [
 
     path("fornecedores/", views.fornecedor_lista, name="fornecedor_lista"),
     path("fornecedores/novo/", views.fornecedor_novo, name="fornecedor_novo"),
+    path("fornecedores/<int:pk>/editar/", views.fornecedor_editar, name="fornecedor_editar"),
+    path("fornecedores/<int:pk>/excluir/", views.fornecedor_excluir, name="fornecedor_excluir"),
     path("clientes/", views.cliente_lista, name="cliente_lista"),
     path("clientes/novo/", views.cliente_novo, name="cliente_novo"),
+    path("clientes/<int:pk>/", views.cliente_detalhe, name="cliente_detalhe"),
+    path("clientes/<int:pk>/editar/", views.cliente_editar, name="cliente_editar"),
+    path("clientes/<int:pk>/excluir/", views.cliente_excluir, name="cliente_excluir"),
 
     path("contratos/", views.contrato_lista, name="contrato_lista"),
     path("contratos/novo/", views.contrato_novo, name="contrato_novo"),
@@ -52,6 +57,7 @@ urlpatterns = [
     path("chamados/historico/", views.chamado_historico, name="chamado_historico"),
     path("chamados/excluir/", views.chamado_excluir, name="chamado_excluir"),
     path("chamados/<int:pk>/", views.chamado_detalhe, name="chamado_detalhe"),
+    path("chamados/<int:pk>/editar/", views.chamado_editar, name="chamado_editar"),
     path("chamados/<int:pk>/imprimir/", views.chamado_imprimir,
          name="chamado_imprimir"),
     path("chamados/<int:pk>/arquivo/", views.chamado_arquivo,

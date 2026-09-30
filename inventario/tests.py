@@ -2192,3 +2192,189 @@ class ImportarMaquinasTests(BaseLogada):
         from django.core.management.base import CommandError
         with self.assertRaises(CommandError):
             self.roda(caminho, "--confirmar")
+
+
+class EdicaoEExclusaoDeClienteTests(BaseComPerfis):
+    """Ficha do cliente, editar e excluir — com a transferência que resolve
+    o cadastro duplicado sem perder histórico."""
+
+    def setUp(self):
+        super().setUp()
+        self.duplicado = Cliente.objects.create(nome="RODOVIARIO SEM CNPJ")
+        maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        self.loc_ativa = Locacao.objects.create(
+            equipamento=maquina, cliente=self.duplicado, valor="0",
+            data_inicio="2026-09-28", ativa=True,
+        )
+        self.loc_antiga = Locacao.objects.create(
+            equipamento=self.maquina, cliente=self.duplicado, valor="0",
+            data_inicio="2026-09-01", data_fim="2026-09-10", ativa=False,
+        )
+        self.chamado_dup = Chamado.objects.create(
+            cliente=self.duplicado, equipamento=maquina, descricao="Fusor.",
+            tecnico=self.tecnico, aberto_por=self.recepcao,
+        )
+        self.contrato_dup = Contrato.objects.create(numero="77", cliente=self.duplicado)
+
+    def test_ficha_mostra_maquinas_e_chamados(self):
+        resposta = self.client.get(reverse("cliente_detalhe", args=[self.duplicado.pk]))
+        self.assertContains(resposta, "INF-1001")
+        self.assertContains(resposta, self.chamado_dup.numero_os)
+        self.assertContains(resposta, reverse("cliente_excluir", args=[self.duplicado.pk]))
+
+    def test_lista_leva_para_a_ficha(self):
+        resposta = self.client.get(reverse("cliente_lista"))
+        self.assertContains(resposta, reverse("cliente_detalhe", args=[self.duplicado.pk]))
+
+    def test_editar_salva(self):
+        resposta = self.client.post(
+            reverse("cliente_editar", args=[self.duplicado.pk]),
+            {"nome": "RODOVIARIO FILIAL", "documento": "", "telefone": "",
+             "email": "", "endereco": "", "observacoes": ""},
+        )
+        self.assertRedirects(resposta, reverse("cliente_detalhe", args=[self.duplicado.pk]))
+        self.duplicado.refresh_from_db()
+        self.assertEqual(self.duplicado.nome, "RODOVIARIO FILIAL")
+
+    def test_sem_vinculo_exclui_direto(self):
+        vazio = Cliente.objects.create(nome="ERRADO")
+        resposta = self.client.post(reverse("cliente_excluir", args=[vazio.pk]))
+        self.assertRedirects(resposta, reverse("cliente_lista"))
+        self.assertFalse(Cliente.objects.filter(pk=vazio.pk).exists())
+
+    def test_com_vinculo_nao_exclui_sem_destino(self):
+        resposta = self.client.get(reverse("cliente_excluir", args=[self.duplicado.pk]))
+        self.assertContains(resposta, "Transferir e excluir")
+        self.assertContains(resposta, "1</strong> chamado(s)")
+        self.client.post(reverse("cliente_excluir", args=[self.duplicado.pk]))
+        self.assertTrue(Cliente.objects.filter(pk=self.duplicado.pk).exists())
+
+    def test_transferir_passa_tudo_e_exclui(self):
+        numero_os = self.chamado_dup.numero_os
+        resposta = self.client.post(
+            reverse("cliente_excluir", args=[self.duplicado.pk]),
+            {"destino": self.cliente.pk},
+        )
+        self.assertRedirects(resposta, reverse("cliente_detalhe", args=[self.cliente.pk]))
+        self.assertFalse(Cliente.objects.filter(pk=self.duplicado.pk).exists())
+        for obj in (self.loc_ativa, self.loc_antiga, self.chamado_dup, self.contrato_dup):
+            obj.refresh_from_db()
+            self.assertEqual(obj.cliente_id, self.cliente.pk)
+        self.assertEqual(self.chamado_dup.numero_os, numero_os)
+        self.assertTrue(self.loc_ativa.ativa)
+        self.assertTrue(Movimentacao.objects.filter(
+            equipamento=self.loc_ativa.equipamento, descricao__contains="unificado em",
+        ).exists())
+
+    def test_nao_transfere_para_ele_mesmo(self):
+        resposta = self.client.post(
+            reverse("cliente_excluir", args=[self.duplicado.pk]),
+            {"destino": self.duplicado.pk},
+        )
+        self.assertEqual(resposta.status_code, 404)
+        self.assertTrue(Cliente.objects.filter(pk=self.duplicado.pk).exists())
+
+    def test_recepcao_edita_e_exclui(self):
+        self.client.force_login(self.recepcao)
+        for nome in ("cliente_editar", "cliente_excluir"):
+            with self.subTest(nome=nome):
+                resposta = self.client.get(reverse(nome, args=[self.duplicado.pk]))
+                self.assertEqual(resposta.status_code, 200)
+
+    def test_tecnico_ve_ficha_mas_nao_edita_nem_exclui(self):
+        self.client.force_login(self.tecnico)
+        resposta = self.client.get(reverse("cliente_detalhe", args=[self.outro_cliente.pk]))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertNotContains(resposta, reverse("cliente_excluir", args=[self.outro_cliente.pk]))
+        # Na ficha, o técnico só vê as OS dele (a do outro cliente é do Analista)
+        self.assertNotIn(self.chamado_outro, list(resposta.context["chamados"]))
+        for nome in ("cliente_editar", "cliente_excluir"):
+            with self.subTest(nome=nome):
+                resposta = self.client.post(reverse(nome, args=[self.duplicado.pk]),
+                                            {"destino": self.cliente.pk})
+                self.assertEqual(resposta.status_code, 403)
+        self.assertTrue(Cliente.objects.filter(pk=self.duplicado.pk).exists())
+
+
+class EdicaoEExclusaoDeFornecedorTests(BaseComPerfis):
+    def setUp(self):
+        super().setUp()
+        from .models import Fornecedor
+        self.fornecedor = Fornecedor.objects.create(nome="DISTRIBUIDORA")
+        self.maquina.fornecedor = self.fornecedor
+        self.maquina.save(update_fields=["fornecedor"])
+
+    def test_lista_leva_para_a_edicao(self):
+        resposta = self.client.get(reverse("fornecedor_lista"))
+        self.assertContains(resposta, reverse("fornecedor_editar", args=[self.fornecedor.pk]))
+
+    def test_editar_salva(self):
+        self.client.post(
+            reverse("fornecedor_editar", args=[self.fornecedor.pk]),
+            {"nome": "DISTRIBUIDORA SUL", "cnpj": "", "telefone": "",
+             "email": "", "observacoes": ""},
+        )
+        self.fornecedor.refresh_from_db()
+        self.assertEqual(self.fornecedor.nome, "DISTRIBUIDORA SUL")
+
+    def test_excluir_deixa_a_maquina_sem_fornecedor(self):
+        resposta = self.client.get(reverse("fornecedor_excluir", args=[self.fornecedor.pk]))
+        self.assertContains(resposta, "1 máquina(s)")
+        self.client.post(reverse("fornecedor_excluir", args=[self.fornecedor.pk]))
+        self.maquina.refresh_from_db()
+        self.assertIsNone(self.maquina.fornecedor)
+
+    def test_tecnico_nao_edita(self):
+        self.client.force_login(self.tecnico)
+        for nome in ("fornecedor_editar", "fornecedor_excluir"):
+            with self.subTest(nome=nome):
+                resposta = self.client.post(reverse(nome, args=[self.fornecedor.pk]))
+                self.assertEqual(resposta.status_code, 403)
+
+
+class EdicaoDoChamadoTests(BaseComPerfis):
+    def dados(self, **troca):
+        dados = {
+            "cliente": self.chamado.cliente_id, "prioridade": self.chamado.prioridade,
+            "descricao": self.chamado.descricao, "tecnico": self.chamado.tecnico_id,
+            "solicitante": "",
+        }
+        dados.update(troca)
+        return dados
+
+    def test_recepcao_troca_o_cliente_e_a_os_nao_muda(self):
+        self.client.force_login(self.recepcao)
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados(cliente=self.outro_cliente.pk),
+        )
+        self.assertRedirects(resposta, reverse("chamado_detalhe", args=[self.chamado.pk]))
+        self.chamado.refresh_from_db()
+        self.assertEqual(self.chamado.cliente, self.outro_cliente)
+        self.assertEqual(self.chamado.equipamento, self.maquina)
+
+    def test_botao_editar_na_os(self):
+        self.client.force_login(self.recepcao)
+        resposta = self.client.get(reverse("chamado_detalhe", args=[self.chamado.pk]))
+        self.assertContains(resposta, reverse("chamado_editar", args=[self.chamado.pk]))
+
+    def test_tecnico_nao_edita(self):
+        self.client.force_login(self.tecnico)
+        resposta = self.client.get(reverse("chamado_detalhe", args=[self.chamado.pk]))
+        self.assertNotContains(resposta, reverse("chamado_editar", args=[self.chamado.pk]))
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados(cliente=self.outro_cliente.pk),
+        )
+        self.assertEqual(resposta.status_code, 403)
+        self.chamado.refresh_from_db()
+        self.assertEqual(self.chamado.cliente, self.cliente)
+
+    def test_tecnico_desativado_continua_na_lista(self):
+        self.tecnico.is_active = False
+        self.tecnico.save()
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados(descricao="Não liga nem com outro cabo."),
+        )
+        self.assertEqual(resposta.status_code, 302)
