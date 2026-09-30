@@ -6,18 +6,39 @@
   <div class="col-lg-7">
     <a href="{{ voltar }}" class="text-muted text-decoration-none">&larr; Voltar</a>
     <h4 class="mt-1 mb-3">{{ titulo }}</h4>
-    {% if form.non_field_errors %}
+    {# Cliente parecido já tem a caixa amarela com a lista, não repete aqui #}
+    {% if form.non_field_errors and not form.parecidos %}
       <div class="alert alert-danger">{{ form.non_field_errors }}</div>
     {% endif %}
     <div class="card shadow-sm"><div class="card-body">
       <form method="post" novalidate>
         {% csrf_token %}
+        {% if form.parecidos %}
+        <div class="alert alert-warning">
+          <strong>Já existe cliente parecido.</strong> Confira antes de salvar:
+          <ul class="mb-2 mt-1">
+            {% for outro, motivo in form.parecidos %}
+            <li><a href="{% url 'cliente_detalhe' outro.pk %}" target="_blank" class="alert-link">{{ outro.nome }}</a>
+                {% if outro.documento %}— {{ outro.documento }}{% endif %}
+                <span class="text-muted small">({{ motivo }})</span></li>
+            {% endfor %}
+          </ul>
+          <div class="small mb-2">Se for o mesmo cliente, cancele e use o cadastro que já existe.
+            Se for outro contrato ou centro de custo (como GUIMA e GUIMA MOTOS), marque abaixo e salve de novo.</div>
+          <div class="form-check">
+            {{ form.confirmar_parecido }}
+            <label class="form-check-label" for="{{ form.confirmar_parecido.id_for_label }}">{{ form.confirmar_parecido.label }}</label>
+          </div>
+        </div>
+        {% endif %}
         {% for field in form %}
+        {% if field.name != "confirmar_parecido" %}
         <div class="mb-3">
           <label class="form-label">{{ field.label }}</label>
           {{ field }}
           {% if field.errors %}<div class="text-danger small">{{ field.errors|striptags }}</div>{% endif %}
         </div>
+        {% endif %}
         {% endfor %}
         <div class="d-flex flex-wrap gap-2">
           <button class="btn text-white" style="background:#16A34A;">Salvar</button>
