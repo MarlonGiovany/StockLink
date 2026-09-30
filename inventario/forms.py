@@ -1,4 +1,5 @@
 import re
+import unicodedata
 from decimal import Decimal
 
 from django import forms
@@ -347,7 +348,40 @@ class FornecedorForm(BootstrapFormMixin, forms.ModelForm):
         return _formata_telefone(digitos)
 
 
+def _nome_comparavel(nome):
+    """ "Hospital Renascença Ltda." → "hospital renascenca ltda" """
+    sem_acento = unicodedata.normalize("NFKD", nome or "")
+    sem_acento = "".join(c for c in sem_acento if not unicodedata.combining(c))
+    return " ".join(re.sub(r"[^\w]+", " ", sem_acento.casefold()).split())
+
+
+def _nomes_parecidos(a, b):
+    """Iguais, ou um contido no outro como palavras inteiras.
+
+    Pega "GUIMA" × "GUIMA MOTOS" e "RENASCENÇA" × "HOSPITAL RENASCENÇA",
+    mas não "ANA" × "SANTANA". Nome curto demais (até 2 letras) não conta.
+    """
+    a, b = _nome_comparavel(a), _nome_comparavel(b)
+    curto, longo = sorted((a, b), key=len)
+    if len(curto) < 3:
+        return False
+    return f" {curto} " in f" {longo} "
+
+
 class ClienteForm(BootstrapFormMixin, forms.ModelForm):
+    """Cadastro do cliente, com aviso de possível duplicado.
+
+    Mesmo CNPJ ou nome parecido com um cliente que já existe não é barrado —
+    há casos legítimos, como GUIMA e GUIMA MOTOS: mesma empresa, contratos e
+    centros de custo diferentes. O formulário só para uma vez, mostra os
+    parecidos e pede que a pessoa marque que é mesmo outro cadastro.
+    """
+
+    confirmar_parecido = forms.BooleanField(
+        required=False,
+        label="É outro cadastro mesmo (outro contrato ou centro de custo). Salvar assim mesmo.",
+    )
+
     class Meta:
         model = Cliente
         fields = ["nome", "documento", "telefone", "email", "endereco", "observacoes"]
@@ -390,6 +424,28 @@ class ClienteForm(BootstrapFormMixin, forms.ModelForm):
                 "Digite um telefone com DDD (10 ou 11 números)."
             )
         return _formata_telefone(digitos)
+
+    def clean(self):
+        dados = super().clean()
+        self.parecidos = []
+        nome = dados.get("nome")
+        if not nome or "documento" in self.errors:
+            return dados
+        # Editar o telefone de um cliente que já foi confirmado não pede de novo
+        if self.instance.pk and not {"nome", "documento"} & set(self.changed_data):
+            return dados
+
+        documento = _apenas_digitos(dados.get("documento"))
+        for outro in Cliente.objects.exclude(pk=self.instance.pk).order_by("nome"):
+            mesmo_doc = documento and _apenas_digitos(outro.documento) == documento
+            if mesmo_doc or _nomes_parecidos(nome, outro.nome):
+                self.parecidos.append((outro, "mesmo CPF/CNPJ" if mesmo_doc else "nome parecido"))
+
+        if self.parecidos and not dados.get("confirmar_parecido"):
+            raise forms.ValidationError(
+                "Já existe cliente parecido. Confira a lista abaixo antes de salvar."
+            )
+        return dados
 
 
 class ContratoForm(BootstrapFormMixin, forms.ModelForm):

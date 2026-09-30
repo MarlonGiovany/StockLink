@@ -2247,12 +2247,12 @@ class EdicaoEExclusaoDeClienteTests(BaseComPerfis):
     def test_editar_salva(self):
         resposta = self.client.post(
             reverse("cliente_editar", args=[self.duplicado.pk]),
-            {"nome": "RODOVIARIO FILIAL", "documento": "", "telefone": "",
+            {"nome": "TRANSPORTADORA NORTE", "documento": "", "telefone": "",
              "email": "", "endereco": "", "observacoes": ""},
         )
         self.assertRedirects(resposta, reverse("cliente_detalhe", args=[self.duplicado.pk]))
         self.duplicado.refresh_from_db()
-        self.assertEqual(self.duplicado.nome, "RODOVIARIO FILIAL")
+        self.assertEqual(self.duplicado.nome, "TRANSPORTADORA NORTE")
 
     def test_sem_vinculo_exclui_direto(self):
         vazio = Cliente.objects.create(nome="ERRADO")
@@ -2396,3 +2396,74 @@ class EdicaoDoChamadoTests(BaseComPerfis):
             self.dados(descricao="Não liga nem com outro cabo."),
         )
         self.assertEqual(resposta.status_code, 302)
+
+
+class AvisoDeClienteParecidoTests(BaseLogada):
+    """Cliente parecido com um que já existe: avisa e pede confirmação,
+    mas não barra (GUIMA e GUIMA MOTOS são cadastros legítimos)."""
+
+    def setUp(self):
+        super().setUp()
+        self.guima = Cliente.objects.create(nome="GUIMA", documento="98.765.432/0001-10")
+
+    def dados(self, **troca):
+        dados = {"nome": "", "documento": "", "telefone": "", "email": "",
+                 "endereco": "", "observacoes": ""}
+        dados.update(troca)
+        return dados
+
+    def test_nome_parecido_para_e_mostra_o_existente(self):
+        resposta = self.client.post(reverse("cliente_novo"), self.dados(nome="Guima Motos"))
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Já existe cliente parecido", count=1)
+        self.assertNotContains(resposta, "alert-danger")
+        self.assertContains(resposta, reverse("cliente_detalhe", args=[self.guima.pk]))
+        self.assertFalse(Cliente.objects.filter(nome="Guima Motos").exists())
+
+    def test_confirmando_salva(self):
+        resposta = self.client.post(
+            reverse("cliente_novo"),
+            self.dados(nome="GUIMA MOTOS", documento="98765432000110", confirmar_parecido="on"),
+        )
+        self.assertRedirects(resposta, reverse("cliente_lista"))
+        self.assertEqual(Cliente.objects.filter(documento="98.765.432/0001-10").count(), 2)
+
+    def test_mesmo_cnpj_com_nome_diferente_tambem_avisa(self):
+        resposta = self.client.post(
+            reverse("cliente_novo"), self.dados(nome="OFICINA CENTRO", documento="98765432000110"),
+        )
+        self.assertContains(resposta, "mesmo CPF/CNPJ")
+        self.assertFalse(Cliente.objects.filter(nome="OFICINA CENTRO").exists())
+
+    def test_acento_e_nome_maior_contam(self):
+        Cliente.objects.create(nome="RENASCENÇA")
+        resposta = self.client.post(
+            reverse("cliente_novo"), self.dados(nome="Hospital Renascenca"),
+        )
+        self.assertContains(resposta, "nome parecido")
+
+    def test_pedaco_de_palavra_nao_conta(self):
+        Cliente.objects.create(nome="ANA")
+        resposta = self.client.post(reverse("cliente_novo"), self.dados(nome="SANTANA"))
+        self.assertRedirects(resposta, reverse("cliente_lista"))
+
+    def test_sem_parecido_salva_sem_perguntar(self):
+        resposta = self.client.post(reverse("cliente_novo"), self.dados(nome="PADARIA"))
+        self.assertRedirects(resposta, reverse("cliente_lista"))
+        self.assertNotContains(self.client.get(reverse("cliente_novo")), "Salvar assim mesmo")
+
+    def test_editar_telefone_nao_pergunta_de_novo(self):
+        motos = Cliente.objects.create(nome="GUIMA MOTOS", documento="98.765.432/0001-10")
+        resposta = self.client.post(
+            reverse("cliente_editar", args=[motos.pk]),
+            self.dados(nome="GUIMA MOTOS", documento="98.765.432/0001-10",
+                       telefone="(34) 99999-0000"),
+        )
+        self.assertRedirects(resposta, reverse("cliente_detalhe", args=[motos.pk]))
+
+    def test_editar_nao_se_compara_com_ele_mesmo(self):
+        resposta = self.client.post(
+            reverse("cliente_editar", args=[self.guima.pk]),
+            self.dados(nome="GUIMA LTDA", documento="98.765.432/0001-10"),
+        )
+        self.assertRedirects(resposta, reverse("cliente_detalhe", args=[self.guima.pk]))
