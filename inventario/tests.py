@@ -641,8 +641,8 @@ class LocacaoDuplicadaTests(BaseLogada):
 class ExclusaoDeEquipamentoTests(BaseLogada):
     """Equipamento locado não pode ser excluído.
 
-    Igual à locação duplicada: o botão "Excluir" some da tela quando o
-    equipamento está locado, mas a trava real precisa estar no servidor.
+    Igual à locação duplicada: a tela de confirmação explica por que não dá
+    para excluir, mas a trava real precisa estar no servidor.
     """
 
     def setUp(self):
@@ -662,6 +662,18 @@ class ExclusaoDeEquipamentoTests(BaseLogada):
             resposta, reverse("equipamento_detalhe", args=[self.maquina.pk])
         )
         self.assertTrue(Equipamento.objects.filter(pk=self.maquina.pk).exists())
+
+    def test_ficha_mostra_excluir_mesmo_locado_e_a_tela_explica_o_motivo(self):
+        ficha = self.client.get(
+            reverse("equipamento_detalhe", args=[self.maquina.pk])
+        )
+        self.assertContains(
+            ficha, reverse("equipamento_excluir", args=[self.maquina.pk])
+        )
+        resposta = self.client.get(
+            reverse("equipamento_excluir", args=[self.maquina.pk])
+        )
+        self.assertContains(resposta, "Encerre a locação")
 
     def test_tela_de_confirmacao_nao_mostra_botao_de_excluir_se_locado(self):
         resposta = self.client.get(
@@ -1671,6 +1683,13 @@ class AnalistaTests(BaseComPerfis):
     def test_superusuario_nao_ganha_contratos_sozinho(self):
         self.client.force_login(self.outro_super)
         self.assertEqual(self.client.get(reverse("contrato_lista")).status_code, 403)
+
+    def test_bloqueio_mostra_pagina_explicando_que_nao_e_erro(self):
+        self.client.force_login(self.outro_super)
+        resposta = self.client.get(reverse("contrato_lista"))
+        self.assertContains(
+            resposta, "Você não tem permissão para abrir esta área", status_code=403
+        )
 
     def perfil(self, usuario, codigo):
         self.client.post(
