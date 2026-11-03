@@ -22,8 +22,8 @@
     {% if perms.inventario.change_equipamento %}
       <a href="{% url 'equipamento_editar' equipamento.pk %}" class="btn btn-sm btn-outline-primary">Editar</a>
     {% endif %}
-    {% if perms.inventario.delete_equipamento and not locacao_ativa %}
-      <a href="{% url 'equipamento_excluir' equipamento.pk %}" class="btn btn-sm btn-outline-danger">Excluir</a>
+    {% if perms.inventario.delete_equipamento %}
+      <a href="{% url 'equipamento_excluir' equipamento.pk %}" class="btn btn-sm btn-outline-danger"{% if locacao_ativa %} title="Locado: a próxima tela explica o que fazer"{% endif %}>Excluir</a>
     {% endif %}
   </div>
 </div>
