@@ -47,8 +47,8 @@ na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
         <div class="os-descricao mb-2">{{ c.descricao|truncatechars:160 }}</div>
 
         <div class="os-rodape text-secondary mb-2">
-          {% if c.solicitante %}🙋 Pediu: {{ c.solicitante }}<br>{% endif %}
-          {% if c.aberto_por %}📝 Abriu: {{ c.aberto_por.get_username }}{% endif %}
+          {% if c.solicitante %}🙋 Solicitou atendimento: {{ c.solicitante }}<br>{% endif %}
+          {% if c.aberto_por %}📝 Operador: {{ c.aberto_por.get_username }}{% endif %}
         </div>
 
         <div class="d-flex justify-content-between align-items-end mt-auto">
