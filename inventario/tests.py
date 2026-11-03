@@ -2627,3 +2627,56 @@ class ExcelDaListaDeEquipamentosTests(BaseComPerfis):
         Equipamento.objects.filter(numero_patrimonio="1004").update(processador="i5")
         cab = self.linhas(self.baixa(produto="todos", status="BAIXADO"))[0]
         self.assertIn("Processador", cab)
+
+
+class TemaNatalTests(TestCase):
+    """O tema de Natal liga sozinho de 1º/dez a 6/jan e pode ser forçado."""
+
+    def test_automatico_so_vale_na_epoca_do_natal(self):
+        from datetime import date
+
+        from django.test import override_settings
+
+        from .context_processors import tema_natal_ligado
+
+        with override_settings(TEMA_NATAL="auto"):
+            self.assertTrue(tema_natal_ligado(date(2026, 12, 1)))
+            self.assertTrue(tema_natal_ligado(date(2027, 1, 6)))
+            self.assertFalse(tema_natal_ligado(date(2027, 1, 7)))
+            self.assertFalse(tema_natal_ligado(date(2026, 11, 30)))
+
+    def test_forcar_liga_e_desliga(self):
+        from datetime import date
+
+        from django.test import override_settings
+
+        from .context_processors import tema_natal_ligado
+
+        with override_settings(TEMA_NATAL="sim"):
+            self.assertTrue(tema_natal_ligado(date(2026, 7, 1)))
+        with override_settings(TEMA_NATAL="nao"):
+            self.assertFalse(tema_natal_ligado(date(2026, 12, 25)))
+
+    def test_login_mostra_chapeu_e_neve_so_com_o_tema_ligado(self):
+        from django.test import override_settings
+
+        with override_settings(TEMA_NATAL="sim"):
+            ligado = self.client.get(reverse("login"))
+        with override_settings(TEMA_NATAL="nao"):
+            desligado = self.client.get(reverse("login"))
+        self.assertContains(ligado, "chapeu-natal")
+        self.assertContains(ligado, 'id="neve"')
+        # Na tela de login a neve cai sempre; dentro do sistema, só no começo
+        self.assertContains(ligado, 'data-modo="continua"')
+        self.assertNotContains(desligado, "chapeu-natal")
+        self.assertNotContains(desligado, 'id="neve"')
+
+    def test_dentro_do_sistema_a_neve_so_cai_no_inicio(self):
+        from django.test import override_settings
+
+        self.client.force_login(
+            get_user_model().objects.create_user("natal", password="x")
+        )
+        with override_settings(TEMA_NATAL="sim"):
+            resposta = self.client.get(reverse("equipamento_lista"))
+        self.assertContains(resposta, 'data-modo="inicial"')

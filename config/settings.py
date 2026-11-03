@@ -219,6 +219,11 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 NOME_SISTEMA = 'INFORLINK'
 NOME_EMPRESA = 'INFORLINK INOVAÇÕES EM TECNOLOGIA'
 
+# Tema de Natal: chapéu de Papai Noel no "I" da marca e neve caindo na tela.
+# 'auto' liga de 1º de dezembro a 6 de janeiro e desliga sozinho depois;
+# 'sim' força ligado (para testar) e 'nao' força desligado.
+TEMA_NATAL = os.environ.get('DJANGO_TEMA_NATAL', 'auto').lower()
+
 # Analista: o único usuário que define perfis e libera áreas restritas
 # (ver inventario/permissoes.py). É o login do Márlon.
 # O login diferencia maiúsculas: em produção é "Admin", com A maiúsculo.

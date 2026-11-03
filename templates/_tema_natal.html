@@ -1,0 +1,80 @@
+{# Neve do tema de Natal: flocos pequenos caindo sobre a tela toda. Não bloqueia cliques. #}
+{# Na tela de login cai sempre; dentro do sistema cai só por uns segundos, logo depois #}
+{# de entrar (uma vez por login), e some — para nunca atrapalhar o trabalho. #}
+<canvas id="neve" aria-hidden="true" data-modo="{% if user.is_authenticated %}inicial{% else %}continua{% endif %}"></canvas>
+<script>
+(function () {
+    var tela = document.getElementById('neve');
+    var ctx = tela.getContext('2d');
+    var flocos = [], largura = 0, altura = 0, rodando = true;
+    var inicial = tela.getAttribute('data-modo') === 'inicial';
+    var gerando = true, acabou = false;
+    var SEGUNDOS_DE_NEVE = 10;
+
+    try {
+        if (!inicial) {
+            // Tela de login: o próximo login volta a ter a nevada de entrada
+            sessionStorage.removeItem('neveVista');
+        } else if (sessionStorage.getItem('neveVista')) {
+            tela.remove();
+            return;
+        } else {
+            sessionStorage.setItem('neveVista', '1');
+        }
+    } catch (e) {}
+    if (inicial) setTimeout(function () { gerando = false; }, SEGUNDOS_DE_NEVE * 1000);
+
+    function ajusta() {
+        largura = tela.width = window.innerWidth;
+        altura = tela.height = window.innerHeight;
+        var total = Math.min(90, Math.round(largura / 18));
+        if (gerando) {
+            while (flocos.length < total) flocos.push(novo(true));
+            if (flocos.length > total) flocos.length = total;
+        }
+    }
+    function novo(qualquerAltura) {
+        return {
+            x: Math.random() * largura,
+            y: qualquerAltura ? Math.random() * altura : -10,
+            r: 1.5 + Math.random() * 2.5,
+            v: 0.4 + Math.random() * 0.9,
+            fase: Math.random() * Math.PI * 2
+        };
+    }
+    function desenha() {
+        if (!rodando) return;
+        ctx.clearRect(0, 0, largura, altura);
+        ctx.fillStyle = 'rgba(255,255,255,.95)';
+        ctx.strokeStyle = 'rgba(120,150,200,.55)';
+        ctx.lineWidth = 0.8;
+        flocos.forEach(function (f, i) {
+            f.y += f.v;
+            f.fase += 0.015;
+            f.x += Math.sin(f.fase) * 0.4;
+            if (f.y > altura + 10) {
+                // Fora da nevada de entrada, o floco que sai da tela não volta
+                if (gerando) flocos[i] = novo(false); else f.fim = true;
+            }
+            ctx.beginPath();
+            ctx.arc(f.x, f.y, f.r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.stroke();
+        });
+        flocos = flocos.filter(function (f) { return !f.fim; });
+        if (!gerando && flocos.length === 0) {
+            tela.remove();           // acabou a nevada: nada mais roda
+            acabou = true;
+            return;
+        }
+        requestAnimationFrame(desenha);
+    }
+    document.addEventListener('visibilitychange', function () {
+        rodando = !document.hidden;
+        if (rodando && !acabou) requestAnimationFrame(desenha);
+    });
+    window.addEventListener('resize', ajusta);
+    ajusta();
+    desenha();
+})();
+</script>
