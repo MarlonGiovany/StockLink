@@ -27,12 +27,21 @@
         .btn-excel { background:#1D6F42; border-color:#1D6F42; color:#fff; }
         .btn-excel:hover, .btn-excel:focus { background:#185C37; border-color:#185C37; color:#fff; }
     </style>
+    {% if tema_natal %}
+    <style>
+        .marca-i { position:relative; display:inline-block; }
+        .chapeu-natal { position:absolute; width:1.2em; left:-.4em; top:-.5em;
+                        transform:rotate(-14deg); pointer-events:none; overflow:visible; }
+        #neve { position:fixed; inset:0; width:100%; height:100%;
+                pointer-events:none; z-index:2000; }
+    </style>
+    {% endif %}
 </head>
 <body>
 {% if user.is_authenticated %}
 <nav class="navbar navbar-expand-lg navbar-dark" style="background:#162D63;">
     <div class="container">
-        <a class="navbar-brand" href="{% url 'equipamento_lista' %}">📦 {{ nome_sistema }}</a>
+        <a class="navbar-brand" href="{% url 'equipamento_lista' %}">📦 {% include "_marca.html" %}</a>
         <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#nav">
             <span class="navbar-toggler-icon"></span>
         </button>
@@ -112,5 +121,6 @@
 })();
 </script>
 {% block scripts %}{% endblock %}
+{% if tema_natal %}{% include "_tema_natal.html" %}{% endif %}
 </body>
 </html>
