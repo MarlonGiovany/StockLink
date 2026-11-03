@@ -2680,3 +2680,21 @@ class TemaNatalTests(TestCase):
         with override_settings(TEMA_NATAL="sim"):
             resposta = self.client.get(reverse("equipamento_lista"))
         self.assertContains(resposta, 'data-modo="inicial"')
+
+
+class RotulosDoPainelTests(BaseLogada):
+    """O cartão do painel da área técnica usa "Solicitou atendimento" e
+    "Operador" (antes: "Pediu" e "Abriu")."""
+
+    def test_cartao_mostra_os_novos_rotulos(self):
+        cliente = Cliente.objects.create(nome="TESTE Padaria")
+        Chamado.objects.create(
+            cliente=cliente, equipamento=Equipamento.objects.get(numero_patrimonio="1001"),
+            descricao="Não liga.", tecnico=self.user,
+            aberto_por=self.user, solicitante="Maria",
+        )
+        resposta = self.client.get(reverse("chamado_painel"))
+        self.assertContains(resposta, "Solicitou atendimento: Maria")
+        self.assertContains(resposta, f"Operador: {self.user.get_username()}")
+        self.assertNotContains(resposta, "Pediu:")
+        self.assertNotContains(resposta, "Abriu:")
