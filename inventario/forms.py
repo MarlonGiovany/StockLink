@@ -226,17 +226,12 @@ class ContratoSelect(forms.Select):
 
 
 class ContratoChoiceField(forms.ModelChoiceField):
-    """Mostra o contrato de um jeito reconhecível: número, cliente e data."""
+    """Mostra o contrato de um jeito reconhecível: cliente e data."""
 
     widget = ContratoSelect
 
     def label_from_instance(self, obj):
-        partes = [f"Nº {obj.numero}"]
-        if obj.cliente:
-            partes.append(str(obj.cliente))
-        if obj.data_contrato:
-            partes.append(obj.data_contrato.strftime("%d/%m/%Y"))
-        return " · ".join(partes)
+        return obj.identificacao
 
 
 def contratos_disponiveis():
@@ -278,7 +273,7 @@ class LocacaoForm(BootstrapFormMixin, forms.ModelForm):
             if contrato.cliente_id != cliente.pk:
                 self.add_error(
                     "contrato",
-                    f'O contrato Nº {contrato.numero} é do cliente '
+                    f'O contrato "{contrato.identificacao}" é do cliente '
                     f'"{contrato.cliente}". Escolha um contrato de {cliente} '
                     f'ou deixe em branco para anexar depois.',
                 )
@@ -452,7 +447,7 @@ class ContratoForm(BootstrapFormMixin, forms.ModelForm):
     class Meta:
         model = Contrato
         fields = [
-            "numero", "titulo", "cliente", "data_contrato",
+            "titulo", "cliente", "data_contrato",
             "valor", "arquivo", "observacoes",
         ]
         widgets = {

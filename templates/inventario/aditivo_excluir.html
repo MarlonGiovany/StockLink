@@ -7,7 +7,7 @@
       <h5 class="text-danger">Excluir aditivo {{ aditivo.numero }}</h5>
       <p>Tem certeza que deseja excluir o <strong>aditivo {{ aditivo.numero }}</strong>
          ({{ aditivo.get_tipo_display }} — {{ aditivo.descricao }})
-         do contrato <strong>{{ contrato.numero }}</strong>?</p>
+         do contrato <strong>{{ contrato.identificacao }}</strong>?</p>
       {% if locacoes %}
         <p class="text-danger">
           Este aditivo incluiu {{ locacoes|length }} máquina{{ locacoes|pluralize }} no

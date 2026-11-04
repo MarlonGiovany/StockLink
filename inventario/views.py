@@ -397,7 +397,7 @@ def locacao_nova(request, pk):
                     equipamento.status = Equipamento.Status.LOCADO
                     equipamento.save(update_fields=["status"])
                 vinculo = (
-                    f" Vinculado ao contrato Nº {locacao.contrato.numero}."
+                    f" Vinculado ao contrato {locacao.contrato.identificacao}."
                     if locacao.contrato else ""
                 )
                 registrar_movimentacao(
@@ -441,7 +441,7 @@ def locacao_vincular_contrato(request, pk):
     if contrato.cliente_id and contrato.cliente_id != locacao.cliente_id:
         messages.error(
             request,
-            f'O contrato Nº {contrato.numero} é do cliente "{contrato.cliente}" '
+            f'O contrato "{contrato.identificacao}" é do cliente "{contrato.cliente}" '
             f'e esta locação é de "{locacao.cliente}".',
         )
         return redirect("equipamento_detalhe", pk=equipamento.pk)
@@ -451,17 +451,17 @@ def locacao_vincular_contrato(request, pk):
     locacao.save(update_fields=["contrato"])
 
     if anterior and anterior.pk != contrato.pk:
-        texto = (f"Contrato da locação alterado: Nº {anterior.numero} → "
-                 f"Nº {contrato.numero}.")
+        texto = (f"Contrato da locação alterado: {anterior.identificacao} → "
+                 f"{contrato.identificacao}.")
     else:
-        texto = f"Locação vinculada ao contrato Nº {contrato.numero}."
+        texto = f"Locação vinculada ao contrato {contrato.identificacao}."
     registrar_movimentacao(
         equipamento, Movimentacao.Tipo.LOCACAO, texto, request.user
     )
 
     messages.success(
         request,
-        f"Locação vinculada ao contrato Nº {contrato.numero} "
+        f"Locação vinculada ao contrato {contrato.identificacao} "
         f"({contrato.maquinas_ativas} máquina(s) neste contrato).",
     )
     return redirect("equipamento_detalhe", pk=equipamento.pk)
@@ -740,8 +740,7 @@ def cliente_excluir(request, pk):
 ORDENS_CONTRATO = {
     "data_desc": ("-data_contrato", "Data (mais recentes)"),
     "data_asc": ("data_contrato", "Data (mais antigos)"),
-    "numero_asc": ("numero", "Número (crescente)"),
-    "numero_desc": ("-numero", "Número (decrescente)"),
+    "cliente_asc": ("cliente__nome", "Cliente (A–Z)"),
 }
 
 
@@ -762,8 +761,7 @@ def contrato_lista(request):
     )
     if termo:
         contratos = contratos.filter(
-            Q(numero__icontains=termo)
-            | Q(titulo__icontains=termo)
+            Q(titulo__icontains=termo)
             | Q(cliente__nome__icontains=termo)
         )
     if de:
@@ -846,7 +844,7 @@ def locacao_valor_em_lote(request, pk):
             locacao.equipamento,
             Movimentacao.Tipo.LOCACAO,
             f"Valor da locação: R$ {_reais(anterior)} → R$ {_reais(valor)} "
-            f"(alteração em lote, contrato Nº {contrato.numero}).",
+            f"(alteração em lote, contrato {contrato.identificacao}).",
             request.user,
         )
         alteradas.append(locacao)
@@ -856,7 +854,7 @@ def locacao_valor_em_lote(request, pk):
             request,
             f"R$ {_reais(valor)} aplicado a {len(alteradas)} "
             f"máquina{'s' if len(alteradas) > 1 else ''} "
-            f"do contrato Nº {contrato.numero}."
+            f"do contrato {contrato.identificacao}."
             + (f" As outras {len(locacoes) - len(alteradas)} já estavam "
                f"com esse valor." if len(locacoes) > len(alteradas) else "")
         )
@@ -889,7 +887,7 @@ def contrato_novo(request):
                 locacao.save(update_fields=["contrato"])
                 messages.success(
                     request,
-                    f"Contrato {contrato.numero} anexado e vinculado à locação de "
+                    f"Contrato {contrato.identificacao} anexado e vinculado à locação de "
                     f"{locacao.equipamento}.",
                 )
                 return redirect("equipamento_detalhe", pk=locacao.equipamento.pk)
@@ -924,7 +922,7 @@ def contrato_editar(request, pk):
         form = ContratoForm(instance=contrato)
     return render(
         request, "inventario/contrato_form.html",
-        {"form": form, "titulo": f"Editar contrato {contrato.numero}", "contrato": contrato},
+        {"form": form, "titulo": f"Editar contrato — {contrato.identificacao}", "contrato": contrato},
     )
 
 
@@ -934,11 +932,11 @@ def contrato_editar(request, pk):
 def contrato_excluir(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
     if request.method == "POST":
-        numero = contrato.numero
+        identificacao = contrato.identificacao
         if contrato.arquivo:
             contrato.arquivo.delete(save=False)
         contrato.delete()
-        messages.success(request, f"Contrato {numero} excluído.")
+        messages.success(request, f"Contrato {identificacao} excluído.")
         return redirect("contrato_lista")
     return render(
         request, "inventario/contrato_excluir.html", {"contrato": contrato}
@@ -1090,7 +1088,7 @@ def aditivo_novo(request, pk):
                                             f"Locado para {contrato.cliente} por "
                                             f"R$ {_reais(valor)} via Aditivo "
                                             f"{proximo} do contrato "
-                                            f"Nº {contrato.numero}.",
+                                            f"{contrato.identificacao}.",
                                             request.user,
                                         )
                                 salvo = True
@@ -1180,7 +1178,7 @@ def aditivo_excluir(request, pk):
                 registrar_movimentacao(
                     equipamento, Movimentacao.Tipo.EDICAO,
                     f"Inclusão desfeita: o Aditivo {numero} do contrato "
-                    f"Nº {contrato.numero} foi excluído.",
+                    f"{contrato.identificacao} foi excluído.",
                     request.user,
                 )
             if aditivo.arquivo:

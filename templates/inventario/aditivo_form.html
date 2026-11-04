@@ -1,10 +1,10 @@
 {% extends "base.html" %}
-{% block titulo %}Novo aditivo — Contrato {{ contrato.numero }}{% endblock %}
+{% block titulo %}Novo aditivo — {{ contrato }}{% endblock %}
 {% block conteudo %}
 <div class="row justify-content-center">
   <div class="col-lg-8">
-    <a href="{% url 'contrato_detalhe' contrato.pk %}" class="text-muted text-decoration-none">&larr; Contrato {{ contrato.numero }}</a>
-    <h4 class="mt-1 mb-1">Novo aditivo do contrato {{ contrato.numero }}</h4>
+    <a href="{% url 'contrato_detalhe' contrato.pk %}" class="text-muted text-decoration-none">&larr; {{ contrato }}</a>
+    <h4 class="mt-1 mb-1">Novo aditivo do contrato {{ contrato.identificacao }}</h4>
     <p class="text-muted">
       Numa <strong>Adição</strong>, marque as máquinas disponíveis abaixo — elas
       são vinculadas ao contrato e a este aditivo automaticamente. Isso

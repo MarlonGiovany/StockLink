@@ -70,9 +70,9 @@
             {% if locacao_ativa.contrato %}
               {% if pode_ver_contratos %}
                 <a href="{% url 'contrato_detalhe' locacao_ativa.contrato.pk %}">
-                  Nº {{ locacao_ativa.contrato.numero }}</a>
+                  {{ locacao_ativa.contrato.cliente|default:"Sem cliente" }}</a>
               {% else %}
-                Nº {{ locacao_ativa.contrato.numero }}
+                {{ locacao_ativa.contrato.cliente|default:"Sem cliente" }}
               {% endif %}
               {% if locacao_ativa.contrato.arquivo and pode_ver_pdfs %}
                 · <a href="{% url 'contrato_pdf' locacao_ativa.contrato.pk %}" target="_blank">📄 PDF</a>
@@ -105,7 +105,7 @@
                   <option value="">— escolha o contrato —</option>
                   {% for c in contratos_do_cliente %}
                     <option value="{{ c.pk }}">
-                      Nº {{ c.numero }} · {{ c.data_contrato|date:"d/m/Y" }}{% if c.qtd_maquinas %} · {{ c.qtd_maquinas }} máquina(s){% endif %}
+                      {{ c.data_contrato|date:"d/m/Y" }}{% if c.qtd_maquinas %} · {{ c.qtd_maquinas }} máquina(s){% endif %}
                     </option>
                   {% endfor %}
                 </select>
