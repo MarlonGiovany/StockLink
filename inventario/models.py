@@ -239,7 +239,12 @@ class Contrato(models.Model):
     # renovar" na listagem.
     DIAS_ATE_RENOVACAO = 15
 
-    numero = models.CharField("Número do contrato", max_length=50, db_index=True)
+    # Não aparece mais nas telas: os números digitados não correspondiam a
+    # nada no papel. Fica guardado no banco só por precaução; o contrato é
+    # identificado pelo cliente + data (ver `identificacao`).
+    numero = models.CharField(
+        "Número do contrato", max_length=50, db_index=True, blank=True, default=""
+    )
     titulo = models.CharField("Título / objeto", max_length=200, blank=True)
     cliente = models.ForeignKey(
         Cliente, on_delete=models.SET_NULL, null=True, blank=True,
@@ -270,9 +275,15 @@ class Contrato(models.Model):
         ]
 
     def __str__(self):
-        if self.titulo:
-            return f"Contrato {self.numero} — {self.titulo}"
-        return f"Contrato {self.numero}"
+        return f"Contrato — {self.identificacao}"
+
+    @property
+    def identificacao(self):
+        """Como o contrato aparece nas telas: "Padaria Silva, 12/03/2025"."""
+        cliente = str(self.cliente) if self.cliente else "Sem cliente"
+        if self.data_contrato:
+            return f"{cliente}, {self.data_contrato.strftime('%d/%m/%Y')}"
+        return cliente
 
     @property
     def nome_arquivo(self):
@@ -377,7 +388,7 @@ class Aditivo(models.Model):
         ]
 
     def __str__(self):
-        return f"Aditivo {self.numero} — {self.contrato.numero}"
+        return f"Aditivo {self.numero} — {self.contrato}"
 
 
 class Movimentacao(models.Model):

@@ -77,7 +77,7 @@ def maquinas_locadas(cliente=None, com_contrato=False):
             m.numero_serie, m.local, loc.data_inicio, loc.valor,
         ]
         if com_contrato:
-            linha.append(loc.contrato.numero if loc.contrato else "")
+            linha.append(loc.contrato.identificacao if loc.contrato else "")
         folha.append(linha)
 
     _formata(folha, 9, FORMATO_DATA)
@@ -125,7 +125,7 @@ def equipamentos(maquinas, titulo, com_locacao=False, com_contrato=False):
         ]
         if com_contrato:
             colunas.append(
-                ("Contrato", lambda m, l: l.contrato.numero if l and l.contrato else "", None)
+                ("Contrato", lambda m, l: l.contrato.identificacao if l and l.contrato else "", None)
             )
     if com_ficha:
         colunas += [

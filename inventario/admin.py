@@ -156,9 +156,9 @@ class AditivoInline(admin.TabularInline):
 
 @admin.register(Contrato)
 class ContratoAdmin(admin.ModelAdmin):
-    list_display = ("numero", "titulo", "cliente", "data_contrato", "valor", "arquivo")
+    list_display = ("__str__", "titulo", "cliente", "data_contrato", "valor", "arquivo")
     list_filter = ("data_contrato", "cliente")
-    search_fields = ("numero", "titulo", "cliente__nome")
+    search_fields = ("titulo", "cliente__nome")
     date_hierarchy = "data_contrato"
     readonly_fields = ("criado_em", "criado_por")
     inlines = [AditivoInline]
@@ -170,7 +170,7 @@ class ContratoAdmin(admin.ModelAdmin):
 class AditivoAdmin(admin.ModelAdmin):
     list_display = ("contrato", "numero", "tipo", "descricao", "valor", "data")
     list_filter = ("tipo", "data")
-    search_fields = ("contrato__numero", "descricao")
+    search_fields = ("contrato__cliente__nome", "descricao")
     readonly_fields = ("criado_em", "criado_por")
     form = form_com_arquivo_protegido("arquivo", "aditivo_pdf")
     formfield_overrides = ARQUIVO_PROTEGIDO

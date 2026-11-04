@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import timedelta
+from datetime import date, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -1318,7 +1318,7 @@ class ValorDeLocacaoEmLoteTests(BaseLogada):
         texto = historico.first().descricao
         self.assertIn("100,00", texto)
         self.assertIn("250,00", texto)
-        self.assertIn("77", texto)
+        self.assertIn(self.contrato.identificacao, texto)
 
     def test_quem_ja_estava_no_valor_nao_gera_historico(self):
         self.aplica([self.l1.pk, self.l2.pk], valor="100.00")
@@ -2508,7 +2508,7 @@ class PlanilhasTests(BaseComPerfis):
         self.assertEqual(set(dados), {"INF-1002", "INF-1003"})
         self.assertEqual(dados["INF-1002"][0], "RODOVIÁRIO")
         self.assertEqual(dados["INF-1002"][9], 250)       # número, não texto
-        self.assertEqual(dados["INF-1002"][-1], "55")
+        self.assertEqual(dados["INF-1002"][-1], contrato.identificacao)
 
     def test_so_de_um_cliente(self):
         linhas = self.linhas(self.client.get(
@@ -2590,7 +2590,7 @@ class ExcelDaListaDeEquipamentosTests(BaseComPerfis):
         cab = linhas[0]
         linha = next(l for l in linhas[1:] if l[0] == "INF-1002")
         self.assertEqual(linha[cab.index("Cliente")], "RODOVIÁRIO")
-        self.assertEqual(linha[cab.index("Contrato")], "55")
+        self.assertEqual(linha[cab.index("Contrato")], contrato.identificacao)
         self.assertEqual(linha[cab.index("Valor da locação")], 250)
 
     def test_outras_situacoes_sem_colunas_de_locacao(self):
@@ -2698,3 +2698,51 @@ class RotulosDoPainelTests(BaseLogada):
         self.assertContains(resposta, f"Operador: {self.user.get_username()}")
         self.assertNotContains(resposta, "Pediu:")
         self.assertNotContains(resposta, "Abriu:")
+
+
+class ContratoSemNumeroTests(BaseLogada):
+    """O número do contrato saiu das telas: ele é identificado por cliente + data."""
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="PADARIA SILVA")
+        self.contrato = Contrato.objects.create(
+            numero="XYZ-987", cliente=self.cliente, data_contrato=date(2025, 3, 12),
+        )
+
+    def test_identificacao_e_cliente_mais_data(self):
+        self.assertEqual(self.contrato.identificacao, "PADARIA SILVA, 12/03/2025")
+        self.assertEqual(str(self.contrato), "Contrato — PADARIA SILVA, 12/03/2025")
+
+    def test_sem_cliente_avisa_no_lugar_do_nome(self):
+        contrato = Contrato.objects.create(data_contrato=date(2025, 3, 12))
+        self.assertEqual(contrato.identificacao, "Sem cliente, 12/03/2025")
+
+    def test_anexar_contrato_nao_pede_numero(self):
+        resposta = self.client.post(
+            reverse("contrato_novo"),
+            {"titulo": "", "cliente": self.cliente.pk,
+             "data_contrato": "2026-08-01", "valor": "", "observacoes": ""},
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertTrue(
+            Contrato.objects.filter(cliente=self.cliente, numero="",
+                                    data_contrato="2026-08-01").exists()
+        )
+
+    def test_editar_guarda_o_numero_antigo_no_banco(self):
+        self.client.post(
+            reverse("contrato_editar", args=[self.contrato.pk]),
+            {"titulo": "Novo título", "cliente": self.cliente.pk,
+             "data_contrato": "2025-03-12", "valor": "", "observacoes": ""},
+        )
+        self.contrato.refresh_from_db()
+        self.assertEqual(self.contrato.titulo, "Novo título")
+        self.assertEqual(self.contrato.numero, "XYZ-987")
+
+    def test_numero_nao_aparece_na_lista_nem_na_ficha(self):
+        for url in (reverse("contrato_lista"),
+                    reverse("contrato_detalhe", args=[self.contrato.pk])):
+            html = self.client.get(url).content.decode()
+            self.assertNotIn("XYZ-987", html)
+            self.assertIn("PADARIA SILVA", html)

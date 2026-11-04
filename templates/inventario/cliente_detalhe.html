@@ -45,7 +45,7 @@
         <td class="text-nowrap">{{ l.data_inicio|date:"d/m/Y" }}</td>
         <td class="text-end text-nowrap">R$ {{ l.valor }}</td>
         {% if pode_ver_contratos %}
-        <td>{% if l.contrato %}<a href="{% url 'contrato_detalhe' l.contrato.pk %}" class="text-decoration-none">Nº {{ l.contrato.numero }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if l.contrato %}<a href="{% url 'contrato_detalhe' l.contrato.pk %}" class="text-decoration-none">{{ l.contrato.data_contrato|date:"d/m/Y" }}</a>{% else %}<span class="text-muted">—</span>{% endif %}</td>
         {% endif %}
       </tr>
       {% empty %}
