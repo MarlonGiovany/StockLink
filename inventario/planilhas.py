@@ -32,6 +32,20 @@ def _planilha(titulo, cabecalho):
     return livro, folha
 
 
+def _adiciona_linha(folha, valores):
+    """Acrescenta uma linha de dados, sempre como valor — nunca como fórmula.
+
+    O openpyxl grava como fórmula qualquer texto que comece com "=". Um nome
+    de cliente, local ou observação digitado como `=HYPERLINK(...)` viraria
+    um link (ou um cálculo) vivo na planilha de quem a abrir. A planilha não
+    usa fórmula nenhuma, então tudo que chegou como fórmula volta a ser texto.
+    """
+    folha.append(valores)
+    for celula in folha[folha.max_row]:
+        if celula.data_type == "f":
+            celula.data_type = "s"
+
+
 def _acerta_colunas(folha):
     for coluna in folha.columns:
         maior = max(len(str(c.value)) if c.value is not None else 0 for c in coluna)
@@ -78,7 +92,7 @@ def maquinas_locadas(cliente=None, com_contrato=False):
         ]
         if com_contrato:
             linha.append(loc.contrato.identificacao if loc.contrato else "")
-        folha.append(linha)
+        _adiciona_linha(folha, linha)
 
     _formata(folha, 9, FORMATO_DATA)
     _formata(folha, 10, FORMATO_REAIS)
@@ -147,7 +161,7 @@ def equipamentos(maquinas, titulo, com_locacao=False, com_contrato=False):
     livro, folha = _planilha(aba, [nome for nome, _, _ in colunas])
     for m in maquinas:
         loc = m.locacao_ativa_lista[0] if m.locacao_ativa_lista else None
-        folha.append([valor(m, loc) for _, valor, _ in colunas])
+        _adiciona_linha(folha, [valor(m, loc) for _, valor, _ in colunas])
     for n, (_, _, formato) in enumerate(colunas, start=1):
         if formato:
             _formata(folha, n, formato)

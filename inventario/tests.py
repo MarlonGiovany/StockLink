@@ -2746,3 +2746,133 @@ class ContratoSemNumeroTests(BaseLogada):
             html = self.client.get(url).content.decode()
             self.assertNotIn("XYZ-987", html)
             self.assertIn("PADARIA SILVA", html)
+
+
+class PlanilhaSemFormulaTests(BaseLogada):
+    """Texto digitado com "=" no começo sai como texto, nunca como fórmula."""
+
+    TEXTO = '=HYPERLINK("http://exemplo.invalido","clique")'
+
+    def setUp(self):
+        super().setUp()
+        cliente = Cliente.objects.create(nome=self.TEXTO)
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        self.maquina.local = self.TEXTO
+        self.maquina.status = Equipamento.Status.LOCADO
+        self.maquina.save()
+        Locacao.objects.create(
+            equipamento=self.maquina, cliente=cliente, valor=Decimal("10"),
+            data_inicio=date.today(), ativa=True,
+        )
+
+    def _celulas(self, resposta):
+        from openpyxl import load_workbook
+
+        folha = load_workbook(io.BytesIO(resposta.content)).active
+        return [c for linha in folha.iter_rows(min_row=2) for c in linha]
+
+    def _confere(self, resposta):
+        celulas = [c for c in self._celulas(resposta) if c.value == self.TEXTO]
+        self.assertTrue(celulas)
+        for celula in celulas:
+            self.assertEqual(celula.data_type, "s")
+
+    def test_maquinas_locadas(self):
+        self._confere(self.client.get(reverse("planilha_maquinas_locadas")))
+
+    def test_lista_de_equipamentos(self):
+        self._confere(self.client.get(
+            reverse("planilha_equipamentos"), {"status": Equipamento.Status.LOCADO}
+        ))
+
+    def test_numero_e_data_continuam_numero_e_data(self):
+        resposta = self.client.get(reverse("planilha_maquinas_locadas"))
+        valores = [c.value for c in self._celulas(resposta)]
+        self.assertIn(10, valores)  # valor da locação segue sendo número
+        self.assertTrue(any(hasattr(v, "year") for v in valores))  # e a data, data
+
+
+class LimiteDeTentativasDeLoginTests(TestCase):
+    SENHA = "senha-certa-123"
+
+    def setUp(self):
+        self.usuario = get_user_model().objects.create_user(
+            "recepcao", password=self.SENHA
+        )
+
+    def _entra(self, senha, usuario="recepcao", url=None, ip="10.0.0.1"):
+        return self.client.post(
+            url or reverse("login"),
+            {"username": usuario, "password": senha},
+            REMOTE_ADDR=ip,
+        )
+
+    def _erra(self, vezes, **kwargs):
+        for _ in range(vezes):
+            self._entra("errada", **kwargs)
+
+    def test_quatro_erros_ainda_deixam_entrar(self):
+        self._erra(4)
+        self.assertRedirects(
+            self._entra(self.SENHA), reverse("equipamento_lista"),
+            fetch_redirect_response=False,
+        )
+
+    def test_cinco_erros_bloqueiam_ate_a_senha_certa(self):
+        self._erra(5)
+        resposta = self._entra(self.SENHA)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Muitas tentativas")
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_erro_comum_mostra_a_mensagem_de_sempre(self):
+        resposta = self._entra("errada")
+        self.assertContains(resposta, "Usuário ou senha inválidos.")
+        self.assertNotContains(resposta, "Muitas tentativas")
+
+    def test_bloqueio_acaba_depois_de_15_minutos(self):
+        self._erra(5)
+        depois = timezone.now() + timedelta(minutes=16)
+        with mock.patch("django.utils.timezone.now", return_value=depois):
+            resposta = self._entra(self.SENHA)
+        self.assertEqual(resposta.status_code, 302)
+
+    def test_acertar_a_senha_zera_os_erros(self):
+        from .models import TentativaDeLogin
+
+        self._erra(4)
+        self._entra(self.SENHA)
+        self.assertFalse(TentativaDeLogin.objects.exists())
+
+    def test_maiusculas_contam_como_o_mesmo_usuario(self):
+        self._erra(3)
+        self._erra(2, usuario="RECEPCAO")
+        self.assertContains(self._entra(self.SENHA), "Muitas tentativas")
+
+    def test_outro_ip_nao_fica_trancado(self):
+        self._erra(5, ip="203.0.113.9")
+        resposta = self._entra(self.SENHA, ip="10.0.0.1")
+        self.assertEqual(resposta.status_code, 302)
+
+    def test_ip_do_proxy_do_pythonanywhere(self):
+        for _ in range(5):
+            self.client.post(
+                reverse("login"), {"username": "recepcao", "password": "x"},
+                REMOTE_ADDR="10.0.0.1", HTTP_X_REAL_IP="203.0.113.9",
+            )
+        # Mesmo proxy, outra pessoa: entra normalmente
+        resposta = self.client.post(
+            reverse("login"), {"username": "recepcao", "password": self.SENHA},
+            REMOTE_ADDR="10.0.0.1", HTTP_X_REAL_IP="198.51.100.7",
+        )
+        self.assertEqual(resposta.status_code, 302)
+
+    def test_login_do_admin_tambem_tem_limite(self):
+        get_user_model().objects.create_superuser(
+            settings.USUARIO_ANALISTA, "a@exemplo.com", self.SENHA
+        )
+        url = reverse("admin:login")
+        self._erra(5, usuario=settings.USUARIO_ANALISTA, url=url)
+        resposta = self._entra(self.SENHA, usuario=settings.USUARIO_ANALISTA, url=url)
+        self.assertContains(resposta, "Muitas tentativas")
+        self.assertNotIn("_auth_user_id", self.client.session)

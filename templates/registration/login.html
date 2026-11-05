@@ -8,7 +8,9 @@
         <h3 class="text-center mb-1" style="color:#162D63;font-weight:700;">📦 {% include "_marca.html" %}</h3>
         <p class="text-center text-muted mb-4">Controle de equipamentos e patrimônio</p>
 
-        {% if form.errors %}
+        {% if form.bloqueado %}
+          <div class="alert alert-danger">{{ form.non_field_errors.0 }}</div>
+        {% elif form.errors %}
           <div class="alert alert-danger">Usuário ou senha inválidos.</div>
         {% endif %}
 
