@@ -6,6 +6,7 @@ from django.contrib.auth.admin import GroupAdmin, UserAdmin
 from django.contrib.auth.models import Group
 from django.db import models
 
+from .acesso import AdminLoginForm
 from .forms import LinkProtegidoMixin, protege_arquivo
 from .permissoes import eh_analista
 from .models import (
@@ -25,6 +26,9 @@ from .models import (
 admin.site.site_header = "StockLink — Administração"
 admin.site.site_title = "StockLink"
 admin.site.index_title = "Painel de administração"
+
+# O login do /admin/ tem o mesmo limite de senhas erradas da tela do sistema
+admin.site.login_form = AdminLoginForm
 
 
 # Usuários e grupos: só o Analista vê e mexe. Um superusuário que não é o Analista entra no

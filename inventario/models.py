@@ -622,3 +622,23 @@ class Chamado(models.Model):
     @property
     def tempo_aberto_texto(self):
         return formata_duracao(self.tempo_aberto)
+
+
+class TentativaDeLogin(models.Model):
+    """Uma senha errada na tela de login (a do sistema ou a do /admin/).
+
+    Serve só para barrar quem fica testando senha: com muitos erros seguidos
+    do mesmo usuário no mesmo IP, o login fica fechado por um tempo (ver
+    inventario/acesso.py). Acertar a senha apaga os erros daquele par.
+    """
+
+    usuario = models.CharField(max_length=150, db_index=True)
+    ip = models.CharField(max_length=45)
+    quando = models.DateTimeField(default=timezone.now, db_index=True)
+
+    class Meta:
+        verbose_name = "tentativa de login errada"
+        verbose_name_plural = "tentativas de login erradas"
+
+    def __str__(self):
+        return f"{self.usuario} ({self.ip}) em {self.quando:%d/%m/%Y %H:%M}"
