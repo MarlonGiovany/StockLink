@@ -7,8 +7,10 @@ from django.contrib.auth.models import Group
 from django.db import models
 
 from .acesso import AdminLoginForm
-from .forms import LinkProtegidoMixin, protege_arquivo
-from .permissoes import eh_analista
+from .forms import (
+    LinkProtegidoMixin, confere_status_de_maquina_locada, protege_arquivo,
+)
+from .permissoes import eh_analista, pode_ver_contratos
 from .models import (
     Aditivo,
     Chamado,
@@ -59,6 +61,26 @@ class GrupoAdmin(SoAnalistaMixin, GroupAdmin):
     pass
 
 
+# Contratos e aditivos: a mesma trava da aba Contratos do sistema. Sem isto, um
+# superusuário que não recebeu a área "ver_contratos" levava 403 em /contratos/
+# mas abria a lista inteira em /admin/ — o Django libera tudo para superusuário.
+class SoComAreaContratosMixin:
+    def has_module_permission(self, request):
+        return pode_ver_contratos(request.user) and super().has_module_permission(request)
+
+    def has_view_permission(self, request, obj=None):
+        return pode_ver_contratos(request.user) and super().has_view_permission(request, obj)
+
+    def has_add_permission(self, request, *args):
+        return pode_ver_contratos(request.user) and super().has_add_permission(request, *args)
+
+    def has_change_permission(self, request, obj=None):
+        return pode_ver_contratos(request.user) and super().has_change_permission(request, obj)
+
+    def has_delete_permission(self, request, obj=None):
+        return pode_ver_contratos(request.user) and super().has_delete_permission(request, obj)
+
+
 admin.site.unregister(get_user_model())
 admin.site.unregister(Group)
 admin.site.register(get_user_model(), UsuarioAdmin)
@@ -88,7 +110,21 @@ class ManutencaoInline(admin.TabularInline):
     extra = 0
 
 
-class LocacaoInline(admin.TabularInline):
+# Contrato e aditivo da locação: quem não tem a área Contratos não vê de qual
+# contrato cada locação é (o aditivo aparece como "Aditivo 1 — <contrato>").
+# Fora do formulário, o vínculo que já existe fica intacto ao salvar.
+CAMPOS_DE_CONTRATO_DA_LOCACAO = ("contrato", "aditivo")
+
+
+class EscondeContratoDaLocacaoMixin:
+    def get_exclude(self, request, obj=None):
+        excluidos = list(super().get_exclude(request, obj) or [])
+        if not pode_ver_contratos(request.user):
+            excluidos += CAMPOS_DE_CONTRATO_DA_LOCACAO
+        return excluidos or None
+
+
+class LocacaoInline(EscondeContratoDaLocacaoMixin, admin.TabularInline):
     model = Locacao
     extra = 0
 
@@ -111,8 +147,18 @@ class ProdutoAdmin(admin.ModelAdmin):
         return obj.equipamentos.count()
 
 
+class EquipamentoAdminForm(forms.ModelForm):
+    """Mesma trava da tela do sistema: máquina locada não vira Disponível."""
+
+    def clean(self):
+        dados = super().clean()
+        confere_status_de_maquina_locada(self, dados)
+        return dados
+
+
 @admin.register(Equipamento)
 class EquipamentoAdmin(admin.ModelAdmin):
+    form = EquipamentoAdminForm
     list_display = (
         "numero_patrimonio", "produto", "marca", "modelo", "numero_serie",
         "local", "status",
@@ -138,10 +184,22 @@ class ClienteAdmin(admin.ModelAdmin):
 
 
 @admin.register(Locacao)
-class LocacaoAdmin(admin.ModelAdmin):
+class LocacaoAdmin(EscondeContratoDaLocacaoMixin, admin.ModelAdmin):
     list_display = ("equipamento", "cliente", "contrato", "valor", "data_inicio", "data_fim", "ativa")
     list_filter = ("ativa",)
-    search_fields = ("equipamento__numero_patrimonio", "cliente__nome", "contrato__numero")
+    search_fields = ("equipamento__numero_patrimonio", "cliente__nome")
+
+    def get_list_display(self, request):
+        colunas = super().get_list_display(request)
+        if pode_ver_contratos(request.user):
+            return colunas
+        return [c for c in colunas if c not in CAMPOS_DE_CONTRATO_DA_LOCACAO]
+
+    def get_search_fields(self, request):
+        # Buscar pelo número do contrato também revelaria o contrato
+        if pode_ver_contratos(request.user):
+            return self.search_fields + ("contrato__numero",)
+        return self.search_fields
 
 
 @admin.register(Manutencao)
@@ -150,7 +208,7 @@ class ManutencaoAdmin(admin.ModelAdmin):
     search_fields = ("equipamento__numero_patrimonio", "tecnico")
 
 
-class AditivoInline(admin.TabularInline):
+class AditivoInline(SoComAreaContratosMixin, admin.TabularInline):
     model = Aditivo
     extra = 0
     fields = ("numero", "tipo", "descricao", "valor", "data", "arquivo")
@@ -159,7 +217,7 @@ class AditivoInline(admin.TabularInline):
 
 
 @admin.register(Contrato)
-class ContratoAdmin(admin.ModelAdmin):
+class ContratoAdmin(SoComAreaContratosMixin, admin.ModelAdmin):
     list_display = ("__str__", "titulo", "cliente", "data_contrato", "valor", "arquivo")
     list_filter = ("data_contrato", "cliente")
     search_fields = ("titulo", "cliente__nome")
@@ -171,7 +229,7 @@ class ContratoAdmin(admin.ModelAdmin):
 
 
 @admin.register(Aditivo)
-class AditivoAdmin(admin.ModelAdmin):
+class AditivoAdmin(SoComAreaContratosMixin, admin.ModelAdmin):
     list_display = ("contrato", "numero", "tipo", "descricao", "valor", "data")
     list_filter = ("tipo", "data")
     search_fields = ("contrato__cliente__nome", "descricao")
