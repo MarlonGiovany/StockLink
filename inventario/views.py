@@ -998,7 +998,9 @@ def aditivo_novo(request, pk):
                 disponiveis_ids = set(
                     Equipamento.objects.filter(
                         pk__in=ids, status=Equipamento.Status.DISPONIVEL
-                    ).values_list("pk", flat=True)
+                    )
+                    .exclude(locacoes__ativa=True)
+                    .values_list("pk", flat=True)
                 )
                 indisponiveis = [e for e in equipamentos if e.pk not in disponiveis_ids]
                 if indisponiveis:

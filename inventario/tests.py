@@ -19,6 +19,7 @@ from django.contrib.auth import get_user_model
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
+from django.db import IntegrityError, transaction
 from django.db.models import ProtectedError, QuerySet
 from django.test import TestCase, override_settings
 from django.urls import reverse
@@ -636,6 +637,116 @@ class LocacaoDuplicadaTests(BaseLogada):
         self.assertEqual(
             Locacao.objects.filter(equipamento=self.maquina, ativa=True).count(), 1
         )
+
+
+class LocacaoAtivaUnicaTests(BaseLogada):
+    """Uma máquina nunca fica locada para dois clientes ao mesmo tempo.
+
+    O caminho que furava a regra: mudar o status de uma máquina locada para
+    "Disponível" na edição e depois incluí-la num aditivo de outro contrato.
+    A edição recusa, o aditivo confere a locação (não só o status) e o banco
+    tem a trava final.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="RODOSERGIPE")
+        self.outro_cliente = Cliente.objects.create(nome="HOSPITAL RENASCENCA")
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1002")
+        self.maquina.status = Equipamento.Status.LOCADO
+        self.maquina.save()
+        Locacao.objects.create(
+            equipamento=self.maquina, cliente=self.cliente,
+            valor="200.00", data_inicio="2026-08-01", ativa=True,
+        )
+        self.contrato_outro = Contrato.objects.create(
+            cliente=self.outro_cliente, data_contrato="2026-08-01"
+        )
+
+    def editar(self, **extra):
+        dados = {
+            "produto": self.impressora.pk, "marca": "HP", "modelo": "LASER 432",
+            "numero_serie": "", "numero_patrimonio": "1002",
+            "processador": "", "memoria_ram": "", "armazenamento": "",
+            "valor_compra": "", "data_aquisicao": "", "fornecedor": "",
+            "local": "", "status": Equipamento.Status.LOCADO, "observacoes": "",
+        }
+        dados.update(extra)
+        return self.client.post(
+            reverse("equipamento_editar", args=[self.maquina.pk]), dados
+        )
+
+    def ativas(self):
+        return Locacao.objects.filter(equipamento=self.maquina, ativa=True).count()
+
+    def test_edicao_recusa_disponivel_com_locacao_ativa(self):
+        resposta = self.editar(status=Equipamento.Status.DISPONIVEL)
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Registre a devolução")
+        self.maquina.refresh_from_db()
+        self.assertEqual(self.maquina.status, Equipamento.Status.LOCADO)
+
+    def test_edicao_recusa_baixado_com_locacao_ativa(self):
+        resposta = self.editar(status=Equipamento.Status.BAIXADO)
+        self.assertEqual(resposta.status_code, 200)
+        self.maquina.refresh_from_db()
+        self.assertEqual(self.maquina.status, Equipamento.Status.LOCADO)
+
+    def test_edicao_de_outros_campos_continua_funcionando(self):
+        resposta = self.editar(local="Sala 2")
+        self.assertEqual(resposta.status_code, 302)
+        self.maquina.refresh_from_db()
+        self.assertEqual(self.maquina.local, "Sala 2")
+
+    def test_edicao_libera_disponivel_depois_da_devolucao(self):
+        locacao = Locacao.objects.get(equipamento=self.maquina, ativa=True)
+        self.client.post(reverse("locacao_encerrar", args=[locacao.pk]))
+        resposta = self.editar(status=Equipamento.Status.DISPONIVEL)
+        self.assertEqual(resposta.status_code, 302)
+
+    def test_aditivo_nao_inclui_maquina_que_ainda_tem_locacao_ativa(self):
+        # Status "Disponível" com locação ativa: o estado que a edição deixava
+        # criar (e que pode já existir em bancos antigos).
+        Equipamento.objects.filter(pk=self.maquina.pk).update(
+            status=Equipamento.Status.DISPONIVEL
+        )
+        url = reverse("aditivo_novo", args=[self.contrato_outro.pk])
+        tela = self.client.get(url)
+        oferecidas = tela.context["form"].fields["equipamentos"].queryset
+        self.assertNotIn(self.maquina, oferecidas)
+        self.assertIn(Equipamento.objects.get(numero_patrimonio="1001"), oferecidas)
+
+        resposta = self.client.post(url, {
+            "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "",
+            "data": "2026-09-01", "observacoes": "",
+            "equipamentos": [self.maquina.pk],
+            f"valor_equip_{self.maquina.pk}": "100",
+        })
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(self.ativas(), 1)
+        self.assertFalse(Aditivo.objects.filter(contrato=self.contrato_outro).exists())
+
+    def test_banco_recusa_segunda_locacao_ativa(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            Locacao.objects.create(
+                equipamento=self.maquina, cliente=self.outro_cliente,
+                valor="100.00", data_inicio="2026-09-01", ativa=True,
+            )
+        self.assertEqual(self.ativas(), 1)
+
+    def test_banco_aceita_varias_locacoes_encerradas(self):
+        for inicio in ("2025-01-01", "2025-06-01"):
+            Locacao.objects.create(
+                equipamento=self.maquina, cliente=self.outro_cliente,
+                valor="100.00", data_inicio=inicio, ativa=False,
+            )
+        self.assertEqual(Locacao.objects.filter(equipamento=self.maquina).count(), 3)
+
+    def test_migracao_passa_quando_nao_ha_duplicadas(self):
+        from django.apps import apps
+
+        migracao = importlib.import_module("inventario.migrations.0021_locacao_ativa_unica")
+        self.assertIsNone(migracao.confere_locacoes_duplicadas(apps, None))
 
 
 class ExclusaoDeEquipamentoTests(BaseLogada):
@@ -1721,6 +1832,156 @@ class AnalistaTests(BaseComPerfis):
     @override_settings(USUARIO_ANALISTA="outro-login")
     def test_o_analista_e_o_login_configurado(self):
         self.assertEqual(self.client.get(reverse("permissoes_usuarios")).status_code, 403)
+
+
+class ContratosNoAdminTests(BaseComPerfis):
+    """O /admin/ respeita a área Contratos, igual às telas do sistema.
+
+    Antes, o superusuário que não recebeu "ver_contratos" levava 403 em
+    /contratos/ mas via a lista inteira em /admin/inventario/contrato/.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.contrato = Contrato.objects.create(
+            cliente=self.cliente, data_contrato="2026-08-01", titulo="Locação de impressoras"
+        )
+        self.aditivo = Aditivo.objects.create(
+            contrato=self.contrato, numero=1, descricao="1 máquina incluída"
+        )
+        self.urls = [
+            reverse("admin:inventario_contrato_changelist"),
+            reverse("admin:inventario_contrato_change", args=[self.contrato.pk]),
+            reverse("admin:inventario_contrato_add"),
+            reverse("admin:inventario_contrato_delete", args=[self.contrato.pk]),
+            reverse("admin:inventario_aditivo_changelist"),
+            reverse("admin:inventario_aditivo_change", args=[self.aditivo.pk]),
+        ]
+
+    def libera_contratos(self, usuario):
+        from django.contrib.auth.models import Permission
+
+        usuario.user_permissions.add(Permission.objects.get(
+            content_type__app_label="inventario", codename="ver_contratos"
+        ))
+
+    def test_superusuario_sem_a_area_nao_abre_contratos_no_admin(self):
+        self.client.force_login(self.outro_super)
+        for url in self.urls:
+            self.assertEqual(self.client.get(url).status_code, 403, url)
+
+    def test_superusuario_sem_a_area_nao_ve_contratos_no_indice_do_admin(self):
+        self.client.force_login(self.outro_super)
+        indice = self.client.get(reverse("admin:index"))
+        self.assertNotContains(indice, reverse("admin:inventario_contrato_changelist"))
+        self.assertNotContains(indice, reverse("admin:inventario_aditivo_changelist"))
+        # O resto do admin continua igual
+        self.assertContains(indice, reverse("admin:inventario_cliente_changelist"))
+
+    def test_superusuario_nao_exclui_contrato_pelo_admin(self):
+        self.client.force_login(self.outro_super)
+        self.client.post(
+            reverse("admin:inventario_contrato_delete", args=[self.contrato.pk]),
+            {"post": "yes"},
+        )
+        self.assertTrue(Contrato.objects.filter(pk=self.contrato.pk).exists())
+
+    def test_superusuario_com_a_area_liberada_abre_contratos_no_admin(self):
+        self.libera_contratos(self.outro_super)
+        self.client.force_login(self.outro_super)
+        for url in self.urls:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
+    def test_analista_abre_contratos_no_admin(self):
+        for url in self.urls:
+            self.assertEqual(self.client.get(url).status_code, 200, url)
+
+
+class LocacoesNoAdminTests(BaseComPerfis):
+    """No /admin/ de Locações e de Equipamentos, quem não tem a área Contratos
+    não vê de qual contrato é cada locação — e o vínculo não se perde ao salvar.
+    Também vale ali a trava de status da máquina locada."""
+
+    def setUp(self):
+        super().setUp()
+        self.contrato = Contrato.objects.create(
+            cliente=self.cliente, data_contrato="2026-03-15"
+        )
+        self.maquina.status = Equipamento.Status.LOCADO
+        self.maquina.save()
+        # A locação ativa da máquina vem de BaseComChamado; aqui ganha contrato
+        self.locacao = Locacao.objects.get(equipamento=self.maquina, ativa=True)
+        self.locacao.contrato = self.contrato
+        self.locacao.save()
+
+    def test_lista_de_locacoes_sem_contrato_para_quem_nao_tem_a_area(self):
+        self.client.force_login(self.outro_super)
+        lista = self.client.get(reverse("admin:inventario_locacao_changelist"))
+        self.assertEqual(lista.status_code, 200)
+        self.assertNotContains(lista, "15/03/2026")
+
+    def test_lista_de_locacoes_com_contrato_para_o_analista(self):
+        lista = self.client.get(reverse("admin:inventario_locacao_changelist"))
+        self.assertContains(lista, "15/03/2026")
+
+    def test_busca_pelo_contrato_so_para_quem_tem_a_area(self):
+        from django.contrib import admin as django_admin
+
+        modelo_admin = django_admin.site._registry[Locacao]
+        pedido = mock.Mock(user=self.outro_super)
+        self.assertNotIn("contrato__numero", modelo_admin.get_search_fields(pedido))
+        pedido.user = self.user
+        self.assertIn("contrato__numero", modelo_admin.get_search_fields(pedido))
+
+    def test_ficha_da_locacao_sem_campo_de_contrato(self):
+        self.client.force_login(self.outro_super)
+        url = reverse("admin:inventario_locacao_change", args=[self.locacao.pk])
+        ficha = self.client.get(url)
+        self.assertNotContains(ficha, 'name="contrato"')
+        self.assertNotContains(ficha, 'name="aditivo"')
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(url), 'name="contrato"')
+
+    def test_salvar_a_locacao_sem_a_area_mantem_o_contrato(self):
+        self.client.force_login(self.outro_super)
+        resposta = self.client.post(
+            reverse("admin:inventario_locacao_change", args=[self.locacao.pk]),
+            {
+                "equipamento": self.maquina.pk, "cliente": self.cliente.pk,
+                "valor": "300.00", "data_inicio": "2026-08-05", "data_fim": "",
+                "ativa": "on", "observacoes": "",
+            },
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.locacao.refresh_from_db()
+        self.assertEqual(self.locacao.valor, Decimal("300.00"))
+        self.assertEqual(self.locacao.contrato, self.contrato)
+
+    def test_ficha_do_equipamento_sem_contrato_nas_locacoes(self):
+        url = reverse("admin:inventario_equipamento_change", args=[self.maquina.pk])
+        self.client.force_login(self.outro_super)
+        self.assertNotContains(self.client.get(url), 'name="locacoes-0-contrato"')
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(url), 'name="locacoes-0-contrato"')
+
+    def _form_do_admin(self, status):
+        from django.contrib import admin as django_admin
+        from django.forms.models import model_to_dict
+
+        modelo_admin = django_admin.site._registry[Equipamento]
+        Form = modelo_admin.get_form(mock.Mock(user=self.user), self.maquina)
+        dados = {k: ("" if v is None else v) for k, v in model_to_dict(self.maquina).items()}
+        dados["status"] = status
+        return Form(dados, instance=self.maquina)
+
+    def test_admin_recusa_disponivel_com_locacao_ativa(self):
+        form = self._form_do_admin(Equipamento.Status.DISPONIVEL)
+        self.assertFalse(form.is_valid())
+        self.assertIn("Registre a devolução", str(form.errors["status"]))
+
+    def test_admin_aceita_editar_maquina_locada_sem_mudar_o_status(self):
+        form = self._form_do_admin(Equipamento.Status.LOCADO)
+        self.assertTrue(form.is_valid(), form.errors)
 
 
 class TrocaDeSenhaPeloAnalistaTests(BaseComPerfis):

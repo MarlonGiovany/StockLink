@@ -194,7 +194,29 @@ class EquipamentoForm(BootstrapFormMixin, forms.ModelForm):
         if produto and not produto.pede_configuracao:
             for campo in self.CAMPOS_CONFIGURACAO:
                 dados[campo] = ""
+        confere_status_de_maquina_locada(self, dados)
         return dados
+
+
+def confere_status_de_maquina_locada(form, dados):
+    """Máquina locada não vira "Disponível" nem "Baixado" pela edição.
+
+    A locação continuaria ativa, e a máquina "disponível" entraria no aditivo
+    de outro cliente, ficando locada para dois ao mesmo tempo. Quem libera a
+    máquina é a devolução, na ficha do equipamento. Vale para a tela do
+    sistema e para o /admin/.
+    """
+    status = dados.get("status")
+    locacao = form.instance.locacao_ativa if form.instance.pk else None
+    if locacao and status in (
+        Equipamento.Status.DISPONIVEL, Equipamento.Status.BAIXADO
+    ):
+        form.add_error(
+            "status",
+            f"Este equipamento está locado para {locacao.cliente}. "
+            f"Registre a devolução na ficha do equipamento antes de "
+            f"mudar a situação para {Equipamento.Status(status).label}.",
+        )
 
 
 class ManutencaoForm(BootstrapFormMixin, forms.ModelForm):
@@ -501,8 +523,11 @@ class AditivoForm(BootstrapFormMixin, forms.ModelForm):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Disponível de verdade: status certo E nenhuma locação ativa. O status
+        # sozinho já deixou passar máquina que ainda estava com outro cliente.
         self.fields["equipamentos"].queryset = (
             Equipamento.objects.filter(status=Equipamento.Status.DISPONIVEL)
+            .exclude(locacoes__ativa=True)
             .select_related("produto")
             .order_by("numero_patrimonio")
         )

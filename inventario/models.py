@@ -220,6 +220,20 @@ class Locacao(models.Model):
         verbose_name = "Locação"
         verbose_name_plural = "Locações"
         ordering = ["-data_inicio", "-id"]
+        # Trava no próprio banco: uma máquina só pode estar com um cliente por
+        # vez, venha a locação da tela, de um aditivo, do /admin/ ou de um
+        # comando. Locações encerradas (histórico) não contam.
+        constraints = [
+            models.UniqueConstraint(
+                fields=["equipamento"],
+                condition=models.Q(ativa=True),
+                name="uma_locacao_ativa_por_equipamento",
+                violation_error_message=(
+                    "Este equipamento já tem uma locação ativa. Encerre a "
+                    "locação atual antes de registrar outra."
+                ),
+            )
+        ]
 
     def __str__(self):
         return f"{self.equipamento} → {self.cliente}"
