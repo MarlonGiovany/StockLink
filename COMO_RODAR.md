@@ -61,15 +61,19 @@ Se aparecer `(venv)` no início da linha do terminal, deu certo. ✅
 > está pronto. A pasta `media` traz os PDFs dos contratos — mantenha.
 
 > **Opção B — começar do zero (sem dados):** se não veio o `db.sqlite3`,
-> rode os comandos abaixo para criar o banco e os usuários `admin` e `operador`:
+> rode os comandos abaixo para criar o banco e os dois primeiros usuários:
+> o `Admin` (o **Analista**, que dá as permissões) e o `operador` (um
+> **Técnico** de exemplo):
 
 ```bat
 python manage.py migrate
 python setup_inicial.py
 ```
 
-(o `setup_inicial.py` vai pedir o e-mail e as senhas do `admin` e do
-`operador` no terminal — nenhuma senha fica salva no código)
+(o `setup_inicial.py` vai pedir o e-mail e as senhas do `Admin` e do
+`operador` no terminal — nenhuma senha fica salva no código). Os outros
+usuários o Analista cria em `/admin/` e escolhe o perfil de cada um na tela
+**Usuários e permissões**.
 
 ---
 
@@ -96,27 +100,23 @@ python manage.py runserver
 
 ---
 
-## Usuários de teste
+## Usuários e senhas
 
 As credenciais de acesso não ficam neste repositório por segurança.
-Consulte o arquivo guardado separadamente (fora do Git). Troque as senhas
-padrão antes de usar pra valer (em `/admin/`).
+Consulte o arquivo guardado separadamente (fora do Git).
+
+Esqueceu a senha? O Analista (`Admin`) troca na tela **Usuários e
+permissões**. Errou a senha 5 vezes seguidas? O login daquele usuário fica
+bloqueado por até 15 minutos — é só esperar.
 
 ---
 
 ## O que o sistema faz
 
-- **Equipamentos**: cadastro, busca, status e localização.
-- **Cores de manutenção** 🟢🟡🟠🔴: uma "bolinha" por equipamento mostra
-  quantas vezes ele já foi pra manutenção (quanto mais vermelho, mais problema).
-- **Locações**: aluguel de equipamento para clientes, com devolução.
-- **Contratos** (aba **Contratos**): anexa o PDF do contrato, com busca,
-  ordenação e filtro por data. Dá pra criar o contrato direto da locação do
-  equipamento (o número do contrato aparece na ficha do equipamento).
-- **Aditivos** dentro de cada contrato: histórico de **adições/remoções** de
-  equipamentos, com data e valor — só registro, **não muda** o valor do
-  contrato (que é manual).
-- **Painel administrativo** completo em `/admin/`.
+Equipamentos, clientes e fornecedores, locações, contratos com aditivos,
+manutenções, **chamados com Ordem de Serviço**, planilhas em Excel e o
+painel administrativo em `/admin/`. A lista completa, com os perfis de
+acesso, está no **`README.md`**.
 
 ---
 
@@ -124,8 +124,10 @@ padrão antes de usar pra valer (em `/admin/`).
 
 Seus dados ficam em **dois lugares**. Para um backup completo, copie os dois:
 
-1. **`db.sqlite3`** — o banco de dados (equipamentos, clientes, contratos...).
-2. **pasta `media`** — os PDFs dos contratos e aditivos.
+1. **`db.sqlite3`** — o banco de dados (equipamentos, clientes, contratos,
+   chamados...).
+2. **pasta `media`** — os PDFs dos contratos, dos aditivos e as OS
+   digitalizadas.
 
 Guarde os dois num lugar seguro (pen drive, nuvem). **Não apague** nenhum dos dois.
 
@@ -141,3 +143,6 @@ Guarde os dois num lugar seguro (pen drive, nuvem). **Não apague** nenhum dos d
   (`venv\Scripts\activate`) ou de rodar o `pip install -r requirements.txt`.
 - **PDF do contrato não abre** → confirme que a pasta `media` veio junto e
   está dentro da pasta do projeto.
+- **"Acesso negado" na aba Contratos ou num PDF** → essas áreas são
+  liberadas pessoa por pessoa. Peça ao Analista (`Admin`) para liberar na
+  tela **Usuários e permissões**.
