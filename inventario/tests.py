@@ -25,6 +25,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
+from . import views
 from .forms import EquipamentoForm, ValorEmLoteForm
 from .models import (
     Aditivo, Chamado, Cliente, Contrato, Equipamento, Locacao, Manutencao,
@@ -261,6 +262,64 @@ class CadastroComProdutoTests(BaseLogada):
         resposta = self.client.get(reverse("equipamento_editar", args=[eq.pk]))
         self.assertEqual(resposta.status_code, 200)
         self.assertEqual(resposta.context["form"].instance.produto, self.desktop)
+
+
+class ComemoracaoDeMarcaDeCadastroTests(BaseLogada):
+    """Confete quando o cadastro fecha 500, 600, 700... máquinas."""
+
+    def completar_ate(self, total):
+        # O BaseLogada já criou 3 máquinas
+        faltam = total - Equipamento.objects.count()
+        Equipamento.objects.bulk_create([
+            Equipamento(marca="HP", modelo="X", numero_patrimonio=f"L{i}")
+            for i in range(faltam)
+        ])
+
+    def cadastrar(self):
+        return self.client.post(reverse("equipamento_novo"), {
+            "produto": self.impressora.pk, "marca": "HP", "modelo": "LASER",
+            "numero_serie": "", "numero_patrimonio": "NOVA",
+            "valor_compra": "", "data_aquisicao": "", "fornecedor": "",
+            "local": "", "status": "DISPONIVEL", "observacoes": "",
+        }, follow=True)
+
+    def test_quais_numeros_sao_marca(self):
+        marca = views.marca_de_cadastro_atingida
+        for total in (500, 600, 700, 1000, 2300):
+            self.assertTrue(marca(total), total)
+        for total in (0, 100, 400, 499, 501, 550, 599, 601):
+            self.assertFalse(marca(total), total)
+
+    def test_quinhentesima_maquina_estoura_confete(self):
+        self.completar_ate(499)
+        html = self.cadastrar().content.decode()
+        self.assertIn("Marca atingida: 500 máquinas cadastradas!", html)
+        self.assertIn("foi você quem cadastrou a 500ª", html)
+        self.assertIn('id="confete"', html)
+        # A classe do alerta continua sendo a do Bootstrap
+        self.assertIn("alert alert-success fw-semibold", html)
+
+    def test_seiscentesima_tambem(self):
+        self.completar_ate(599)
+        self.assertIn('id="confete"', self.cadastrar().content.decode())
+
+    def test_fora_da_marca_nao_tem_confete(self):
+        self.completar_ate(500)
+        html = self.cadastrar().content.decode()  # 501ª
+        self.assertIn("Equipamento cadastrado com sucesso.", html)
+        self.assertNotIn('id="confete"', html)
+        self.assertNotIn("Marca atingida", html)
+
+    def test_abaixo_de_500_nao_comemora(self):
+        self.completar_ate(399)
+        self.assertNotIn('id="confete"', self.cadastrar().content.decode())
+
+    def test_maquinas_baixadas_contam(self):
+        self.completar_ate(499)
+        Equipamento.objects.filter(numero_patrimonio="L0").update(
+            status=Equipamento.Status.BAIXADO
+        )
+        self.assertIn('id="confete"', self.cadastrar().content.decode())
 
 
 class ProdutoNovoTests(BaseLogada):

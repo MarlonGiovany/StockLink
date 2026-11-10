@@ -225,6 +225,7 @@ def equipamento_novo(request):
                 request.user,
             )
             messages.success(request, "Equipamento cadastrado com sucesso.")
+            comemorar_marca_de_cadastro(request)
             return redirect("equipamento_detalhe", pk=equipamento.pk)
     else:
         # Vindo do painel de produtos (?produto=<id>), já deixa escolhido
@@ -236,6 +237,36 @@ def equipamento_novo(request):
     return render(
         request, "inventario/equipamento_form.html",
         contexto_equipamento_form(form, "Novo equipamento"),
+    )
+
+
+PRIMEIRA_MARCA_DE_CADASTRO = 500
+INTERVALO_ENTRE_MARCAS = 100
+
+
+def marca_de_cadastro_atingida(total):
+    """O total de máquinas caiu bem numa marca? 500, 600, 700..."""
+    return (
+        total >= PRIMEIRA_MARCA_DE_CADASTRO
+        and total % INTERVALO_ENTRE_MARCAS == 0
+    )
+
+
+def comemorar_marca_de_cadastro(request):
+    """Se a máquina recém-cadastrada fechou uma marca, avisa quem cadastrou.
+
+    Conta todas as máquinas, inclusive as baixadas. A mensagem leva a tag
+    "comemoracao", e o base.html estoura o confete quando a vê.
+    """
+    total = Equipamento.objects.count()
+    if not marca_de_cadastro_atingida(total):
+        return
+    nome = request.user.get_full_name() or request.user.get_username()
+    messages.success(
+        request,
+        f"🎉 Marca atingida: {total} máquinas cadastradas! "
+        f"Parabéns, {nome} — foi você quem cadastrou a {total}ª!",
+        extra_tags="comemoracao",
     )
 
 
