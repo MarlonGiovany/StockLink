@@ -1,0 +1,100 @@
+{# Confete da comemoração de marca de cadastro (500, 600, 700... máquinas). #}
+{# Estoura no alto da tela e chove confete colorido por 5 segundos, como a neve do #}
+{# tema de Natal; depois para de gerar, os últimos terminam de cair e o canvas some. #}
+{# Não bloqueia cliques. #}
+<canvas id="confete" aria-hidden="true"
+        style="position:fixed; inset:0; width:100%; height:100%; pointer-events:none; z-index:2000;"></canvas>
+<script>
+(function () {
+    var tela = document.getElementById('confete');
+    var ctx = tela.getContext('2d');
+    var cores = ['#F43F5E', '#F59E0B', '#22C55E', '#3B82F6', '#A855F7', '#EAB308', '#06B6D4', '#EC4899'];
+    var pedacos = [], largura = 0, altura = 0;
+    var SEGUNDOS_DE_CONFETE = 5;
+    var gerando = true;
+
+    function ajusta() {
+        largura = tela.width = window.innerWidth;
+        altura = tela.height = window.innerHeight;
+    }
+    function quantidade() { return Math.min(220, Math.round(largura / 7)); }
+
+    function novo(x, y, vx, vy) {
+        return {
+            x: x, y: y, vx: vx, vy: vy,
+            w: 7 + Math.random() * 6, h: 10 + Math.random() * 8,
+            giro: Math.random() * Math.PI, vGiro: (Math.random() - 0.5) * 0.25,
+            balanco: Math.random() * Math.PI * 2,
+            queda: 1.6 + Math.random() * 2.2,      // velocidade final de queda
+            cor: cores[Math.floor(Math.random() * cores.length)],
+            redondo: Math.random() < 0.25
+        };
+    }
+    // Pedaço que entra pelo alto, em qualquer ponto da largura (como um floco de neve)
+    function caindo() {
+        return novo(Math.random() * largura, -20 - Math.random() * 40,
+                    (Math.random() - 0.5) * 1.5, 0);
+    }
+
+    ajusta();
+    window.addEventListener('resize', ajusta);
+
+    // O estouro: uma explosão no alto, no meio da tela, jogando confete para os lados
+    for (var i = 0; i < quantidade(); i++) {
+        var angulo = Math.random() * Math.PI * 2;
+        var forca = 4 + Math.random() * 12;
+        pedacos.push(novo(largura / 2, altura * 0.18,
+                          Math.cos(angulo) * forca, Math.sin(angulo) * forca - 3));
+    }
+    // E já começa a chover pela tela toda
+    for (var j = 0; j < quantidade(); j++) {
+        var p = caindo();
+        p.y = -Math.random() * altura * 0.6;
+        pedacos.push(p);
+    }
+    setTimeout(function () { gerando = false; }, SEGUNDOS_DE_CONFETE * 1000);
+
+    function desenha() {
+        ctx.clearRect(0, 0, largura, altura);
+        var restantes = [];
+        pedacos.forEach(function (p) {
+            p.vx *= 0.97;                                   // resistência do ar
+            p.vy = Math.min(p.vy + 0.18, p.queda);          // gravidade até a queda final
+            p.balanco += 0.06;
+            p.x += p.vx + Math.sin(p.balanco) * 0.9;
+            p.y += p.vy;
+            p.giro += p.vGiro;
+
+            if (p.y > altura + 30) {
+                // Enquanto dura a comemoração, quem sai por baixo volta pelo alto
+                if (gerando) restantes.push(caindo());
+                return;
+            }
+            restantes.push(p);
+
+            ctx.save();
+            ctx.translate(p.x, p.y);
+            ctx.rotate(p.giro);
+            ctx.scale(1, Math.cos(p.balanco));              // efeito de papel girando
+            ctx.fillStyle = p.cor;
+            if (p.redondo) {
+                ctx.beginPath();
+                ctx.arc(0, 0, p.w / 2, 0, Math.PI * 2);
+                ctx.fill();
+            } else {
+                ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+            }
+            ctx.restore();
+        });
+        pedacos = restantes;
+
+        if (pedacos.length) {
+            requestAnimationFrame(desenha);
+        } else {
+            window.removeEventListener('resize', ajusta);
+            tela.remove();
+        }
+    }
+    requestAnimationFrame(desenha);
+})();
+</script>
