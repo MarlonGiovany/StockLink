@@ -97,7 +97,7 @@
   </div>
   {% if pagina.has_other_pages %}
   {# 20 por página; os links levam junto a busca e os filtros (filtros_da_url) #}
-  <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+  <div class="card-footer bg-body d-flex justify-content-between align-items-center">
     <div style="min-width:8rem;">
       {% if pagina.has_previous %}
       <a href="?{% if filtros_da_url %}{{ filtros_da_url }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}"

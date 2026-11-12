@@ -5,7 +5,7 @@
   <div class="col-md-5 col-lg-4">
     <div class="card shadow-sm mt-5">
       <div class="card-body p-4">
-        <h3 class="text-center mb-1" style="color:#162D63;font-weight:700;">📦 {% include "_marca.html" %}</h3>
+        <h3 class="text-center mb-1 titulo-marca" style="font-weight:700;">📦 {% include "_marca.html" %}</h3>
         <p class="text-center text-muted mb-4">Controle de equipamentos e patrimônio</p>
 
         {% if form.bloqueado %}
@@ -24,7 +24,7 @@
             <label class="form-label" for="senha">Senha</label>
             <div class="input-group">
               <input type="password" name="password" id="senha" class="form-control border-end-0" required>
-              <button type="button" id="ver-senha" class="btn btn-outline-secondary border-start-0 bg-white text-secondary"
+              <button type="button" id="ver-senha" class="btn btn-outline-secondary border-start-0 bg-body text-secondary"
                       aria-label="Mostrar senha" aria-pressed="false" title="Mostrar senha" tabindex="-1">
                 <!-- olho aberto: senha escondida, clique para mostrar -->
                 <svg id="icone-mostrar" xmlns="http://www.w3.org/2000/svg" width="18" height="18"

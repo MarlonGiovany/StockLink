@@ -44,7 +44,7 @@
     <h6 class="text-uppercase text-muted mb-1">
       Máquinas neste contrato <span class="text-muted">({{ qtd_maquinas }})</span>
       {% if qtd_encerradas %}
-        <span class="badge bg-light text-dark border fw-normal text-lowercase">
+        <span class="badge bg-body-secondary text-body border fw-normal text-lowercase">
           + {{ qtd_encerradas }} encerrada{{ qtd_encerradas|pluralize }}, fora da conta
         </span>
       {% endif %}
@@ -122,7 +122,7 @@
         </div>
 
         {% if perms.inventario.change_locacao and qtd_maquinas %}
-          <div class="border rounded-3 p-2 mt-3" style="background:#f8fafc;">
+          <div class="border rounded-3 p-2 mt-3 bg-body-tertiary">
             <div class="row g-2 align-items-end">
               <div class="col-md-5">
                 <label class="form-label small text-muted mb-1"

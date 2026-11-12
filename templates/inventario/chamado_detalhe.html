@@ -132,7 +132,7 @@
           </p>
           <p class="mb-3">
             <strong>Tempo até o encerramento:</strong>
-            <span class="badge bg-light text-dark border fs-6">{{ chamado.duracao_texto }}</span>
+            <span class="badge bg-body-secondary text-body border fs-6">{{ chamado.duracao_texto }}</span>
           </p>
 
           <hr>
@@ -145,7 +145,7 @@
               <span class="badge" style="background:#F97316;">Sim</span>
               {{ chamado.peca_substituida|default:"peça não especificada" }}
             {% else %}
-              <span class="badge bg-light text-dark border">Não houve troca de peça</span>
+              <span class="badge bg-body-secondary text-body border">Não houve troca de peça</span>
             {% endif %}
           </p>
 

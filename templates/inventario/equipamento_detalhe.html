@@ -13,7 +13,7 @@
     <h4 class="mb-0 mt-1">{{ equipamento.marca }} {{ equipamento.modelo }}</h4>
     <span class="text-muted">
       {% if equipamento.produto %}
-        <span class="badge bg-light text-dark border">{{ equipamento.produto }}</span> ·
+        <span class="badge bg-body-secondary text-body border">{{ equipamento.produto }}</span> ·
       {% endif %}
       INF-{{ equipamento.numero_patrimonio }}
     </span>
@@ -79,7 +79,7 @@
               {% endif %}
               {% with total=locacao_ativa.contrato.maquinas_ativas %}
                 {% if total > 1 %}
-                  <span class="badge bg-light text-dark border">{{ total }} máquinas neste contrato</span>
+                  <span class="badge bg-body-secondary text-body border">{{ total }} máquinas neste contrato</span>
                 {% endif %}
               {% endwith %}
             {% else %}
@@ -91,7 +91,7 @@
           {% if perms.inventario.change_locacao %}
             {% if contratos_do_cliente %}
             <form method="post" action="{% url 'locacao_vincular_contrato' locacao_ativa.pk %}"
-                  class="border rounded-3 p-2 mt-2" style="background:#f8fafc;">
+                  class="border rounded-3 p-2 mt-2 bg-body-tertiary">
               {% csrf_token %}
               <label class="form-label small text-muted mb-1">
                 {% if locacao_ativa.contrato %}
@@ -177,7 +177,7 @@
       <ul class="list-group list-group-flush">
         {% for mov in movimentacoes %}
         <li class="list-group-item px-0 d-flex justify-content-between">
-          <span><span class="badge bg-light text-dark border me-2">{{ mov.get_tipo_display }}</span>{{ mov.descricao }}</span>
+          <span><span class="badge bg-body-secondary text-body border me-2">{{ mov.get_tipo_display }}</span>{{ mov.descricao }}</span>
           <small class="text-muted">{{ mov.data|date:"d/m/Y H:i" }}{% if mov.usuario %} · {{ mov.usuario.get_username }}{% endif %}</small>
         </li>
         {% endfor %}
