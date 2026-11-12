@@ -29,7 +29,7 @@
   {% if cliente_atual %}<input type="hidden" name="cliente" value="{{ cliente_atual.pk }}">{% endif %}
   <div class="{% if status_atual %}col-md-5{% else %}col-md-7{% endif %}">
     <input type="text" name="q" value="{{ termo }}" class="form-control"
-           placeholder="Buscar por marca, modelo, série, INF ou local...">
+           placeholder="Buscar por marca, modelo, série, INF, local, cliente ou contrato...">
   </div>
   <div class="col-md-3">
     <select name="status" class="form-select">
@@ -95,5 +95,23 @@
       </tbody>
     </table>
   </div>
+  {% if pagina.has_other_pages %}
+  {# 20 por página; os links levam junto a busca e os filtros (filtros_da_url) #}
+  <div class="card-footer bg-white d-flex justify-content-between align-items-center">
+    <div style="min-width:8rem;">
+      {% if pagina.has_previous %}
+      <a href="?{% if filtros_da_url %}{{ filtros_da_url }}&amp;{% endif %}pagina={{ pagina.previous_page_number }}"
+         class="btn btn-sm btn-outline-secondary">&lsaquo; Página {{ pagina.previous_page_number }}</a>
+      {% endif %}
+    </div>
+    <span class="text-muted small">Página {{ pagina.number }} de {{ pagina.paginator.num_pages }}</span>
+    <div class="text-end" style="min-width:8rem;">
+      {% if pagina.has_next %}
+      <a href="?{% if filtros_da_url %}{{ filtros_da_url }}&amp;{% endif %}pagina={{ pagina.next_page_number }}"
+         class="btn btn-sm btn-outline-secondary">Página {{ pagina.next_page_number }} &rsaquo;</a>
+      {% endif %}
+    </div>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}

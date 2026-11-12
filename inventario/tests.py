@@ -3196,3 +3196,118 @@ class LimiteDeTentativasDeLoginTests(TestCase):
         resposta = self._entra(self.SENHA, usuario=settings.USUARIO_ANALISTA, url=url)
         self.assertContains(resposta, "Muitas tentativas")
         self.assertNotIn("_auth_user_id", self.client.session)
+
+
+class BuscaPorClienteELocalTests(BaseLogada):
+    """A busca da lista de equipamentos olha o local físico E o cliente /
+    contrato da locação ativa, sem diferença de acento ou maiúsculas."""
+
+    def setUp(self):
+        super().setUp()
+        self.hospital = Cliente.objects.create(nome="Hospital Renascença")
+        self.outro = Cliente.objects.create(nome="PADARIA")
+        self.contrato = Contrato.objects.create(
+            numero="77", titulo="Impressão", cliente=self.hospital,
+            data_contrato="2026-08-01",
+        )
+        self.locada, self.no_local, self.as_duas = (
+            Equipamento.objects.order_by("numero_patrimonio")
+        )
+        # Locada para o hospital, mas guardada em outro lugar
+        Locacao.objects.create(
+            equipamento=self.locada, cliente=self.hospital, contrato=self.contrato,
+            valor="0", data_inicio="2026-09-25", ativa=True,
+        )
+        # Fisicamente no hospital, locada para outro cliente
+        self.no_local.local = "HOSPITAL RENASCENÇA - 2º andar"
+        self.no_local.save()
+        Locacao.objects.create(
+            equipamento=self.no_local, cliente=self.outro,
+            valor="0", data_inicio="2026-09-25", ativa=True,
+        )
+        # Locada para o hospital E no hospital: não pode aparecer duas vezes
+        self.as_duas.local = "Renascença"
+        self.as_duas.save()
+        Locacao.objects.create(
+            equipamento=self.as_duas, cliente=self.hospital,
+            valor="0", data_inicio="2026-09-25", ativa=True,
+        )
+
+    def _busca(self, **params):
+        resposta = self.client.get(reverse("equipamento_lista"), params)
+        return list(resposta.context["equipamentos"])
+
+    def test_traz_cliente_ou_local_sem_duplicar(self):
+        achados = self._busca(q="Renascença")
+        self.assertCountEqual(achados, [self.locada, self.no_local, self.as_duas])
+        self.assertEqual(len(achados), 3)
+
+    def test_ignora_acento_e_maiusculas(self):
+        for termo in ("renascenca", "RENASCENÇA", "rEnAsCeN"):
+            with self.subTest(termo=termo):
+                self.assertEqual(len(self._busca(q=termo)), 3)
+
+    def test_busca_pelo_contrato_da_locacao(self):
+        self.assertEqual(self._busca(q="impressao"), [self.locada])
+
+    def test_locacao_encerrada_nao_conta(self):
+        Locacao.objects.filter(equipamento=self.locada).update(ativa=False)
+        achados = self._busca(q="Renascença")
+        self.assertCountEqual(achados, [self.no_local, self.as_duas])
+
+    def test_busca_respeita_status_e_produto(self):
+        self.assertEqual(
+            self._busca(q="Renascença", produto=self.impressora.pk),
+            sorted([self.no_local, self.as_duas], key=lambda e: e.marca),
+        )
+
+
+class PaginacaoDaListaDeEquipamentosTests(BaseLogada):
+    """20 equipamentos por página, mantendo busca e filtros nos links."""
+
+    def setUp(self):
+        super().setUp()
+        for n in range(42):   # 3 do BaseLogada + 42 = 45 → 3 páginas
+            Equipamento.objects.create(
+                produto=self.impressora, marca="EPSON", modelo="L3250",
+                numero_patrimonio=f"9{n:03d}",
+            )
+
+    def _lista(self, **params):
+        return self.client.get(reverse("equipamento_lista"), {"produto": "todos", **params})
+
+    def test_primeira_pagina_tem_20_e_seta_para_a_pagina_2(self):
+        resposta = self._lista()
+        self.assertEqual(len(resposta.context["equipamentos"]), 20)
+        self.assertEqual(resposta.context["total"], 45)
+        self.assertContains(resposta, "Página 2 &rsaquo;")
+        self.assertContains(resposta, "Página 1 de 3")
+        self.assertNotContains(resposta, "&lsaquo; Página")
+
+    def test_ultima_pagina_volta_e_nao_avanca(self):
+        resposta = self._lista(pagina=3)
+        self.assertEqual(len(resposta.context["equipamentos"]), 5)
+        self.assertContains(resposta, "&lsaquo; Página 2")
+        self.assertNotContains(resposta, "&rsaquo;</a>")
+
+    def test_paginas_nao_repetem_nem_perdem_maquina(self):
+        vistos = []
+        for n in (1, 2, 3):
+            vistos += list(self._lista(pagina=n).context["equipamentos"])
+        self.assertEqual(len(vistos), 45)
+        self.assertEqual(len(set(vistos)), 45)
+
+    def test_links_mantem_busca_e_filtros(self):
+        resposta = self._lista(q="epson", status="DISPONIVEL")
+        self.assertEqual(resposta.context["total"], 42)
+        self.assertContains(
+            resposta, "?produto=todos&amp;q=epson&amp;status=DISPONIVEL&amp;pagina=2"
+        )
+
+    def test_pagina_invalida_cai_numa_pagina_valida(self):
+        self.assertEqual(self._lista(pagina="abc").context["pagina"].number, 1)
+        self.assertEqual(self._lista(pagina=99).context["pagina"].number, 3)
+
+    def test_poucos_resultados_nao_mostram_navegacao(self):
+        resposta = self._lista(q="OPTIPLEX")
+        self.assertNotContains(resposta, "Página 1 de")
