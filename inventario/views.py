@@ -9,6 +9,7 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required, permission_required
 from django.contrib.auth.models import Permission
 from django.core.exceptions import PermissionDenied
+from django.core.paginator import Paginator
 from django.db import IntegrityError, transaction
 from django.db.models import Case, Count, IntegerField, Max, Q, Sum, Value, When
 from django.http import FileResponse, Http404, HttpResponse, JsonResponse
@@ -101,10 +102,19 @@ def equipamento_lista(request):
         )
 
     equipamentos, filtros = _equipamentos_filtrados(request)
+    # 20 por página. O "pk" no fim deixa a ordem estável: sem ele, máquinas
+    # de mesma marca e modelo podiam pular de uma página para outra.
+    paginas = Paginator(equipamentos.order_by("marca", "modelo", "pk"), 20)
+    pagina = paginas.get_page(request.GET.get("pagina"))
+    # Os links de página levam junto a busca e os filtros da tela
+    parametros = request.GET.copy()
+    parametros.pop("pagina", None)
     contexto = {
-        "equipamentos": equipamentos,
+        "equipamentos": pagina.object_list,
+        "pagina": pagina,
+        "filtros_da_url": parametros.urlencode(),
         "status_choices": Equipamento.Status.choices,
-        "total": equipamentos.count(),
+        "total": paginas.count,
     }
     contexto.update(filtros)
     return render(request, "inventario/equipamento_lista.html", contexto)
@@ -131,12 +141,7 @@ def _equipamentos_filtrados(request):
 
     if termo:
         equipamentos = equipamentos.filter(
-            Q(marca__icontains=termo)
-            | Q(modelo__icontains=termo)
-            | Q(numero_serie__icontains=termo)
-            | Q(numero_patrimonio__icontains=termo)
-            | Q(local__icontains=termo)
-            | Q(produto__nome__icontains=termo)
+            pk__in=_ids_que_batem_com_a_busca(equipamentos, termo)
         )
     if status:
         equipamentos = equipamentos.filter(status=status)
@@ -156,6 +161,39 @@ def _equipamentos_filtrados(request):
         "produto_param": produto_param,
         "cliente_atual": cliente_atual,
     }
+
+
+def _ids_que_batem_com_a_busca(equipamentos, termo):
+    """Ids dos equipamentos em que o termo aparece em algum campo (OR).
+
+    Olha os dados da própria máquina (marca, modelo, série, INF, local,
+    produto) e também o cliente e o contrato da locação ativa. Assim,
+    "Renascença" traz tanto o que está locado para o Hospital Renascença
+    quanto o que está fisicamente lá.
+
+    A comparação é feita aqui, sem acento e sem diferença de maiúsculas,
+    porque o icontains do SQLite só ignora a caixa em letras sem acento
+    ("RENASCENÇA" não achava "Renascença"). O retorno é um conjunto, então
+    quem bate em mais de um critério aparece uma vez só.
+    """
+    alvo = _chave_alfabetica(termo)
+    ids = set()
+
+    campos = ("marca", "modelo", "numero_serie", "numero_patrimonio",
+              "local", "produto__nome")
+    for pk, *valores in equipamentos.values_list("pk", *campos):
+        if any(alvo in _chave_alfabetica(v or "") for v in valores):
+            ids.add(pk)
+
+    locacoes = Locacao.objects.filter(
+        ativa=True, equipamento__in=equipamentos
+    ).values_list("equipamento_id", "cliente__nome",
+                  "contrato__numero", "contrato__titulo")
+    for pk, *valores in locacoes:
+        if any(alvo in _chave_alfabetica(v or "") for v in valores):
+            ids.add(pk)
+
+    return ids
 
 
 @login_required
