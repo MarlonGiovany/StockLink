@@ -58,7 +58,7 @@
             {% else %}📦{% endif %}
           {% endwith %}
         </div>
-        <div class="fs-5 fw-semibold {% if produto.qtd == 0 %}text-muted{% else %}text-dark{% endif %}">
+        <div class="fs-5 fw-semibold {% if produto.qtd == 0 %}text-muted{% else %}text-body{% endif %}">
           {{ produto.nome }}
         </div>
         <div class="text-muted small">
@@ -84,7 +84,7 @@
     <div class="card card-produto h-100 shadow-sm border-warning">
       <div class="card-body text-center py-4">
         <div class="emoji-produto mb-2">❓</div>
-        <div class="fs-5 fw-semibold text-dark">Sem produto</div>
+        <div class="fs-5 fw-semibold text-body">Sem produto</div>
         <div class="text-muted small">{{ sem_produto }} equipamento{{ sem_produto|pluralize }}</div>
       </div>
     </div>

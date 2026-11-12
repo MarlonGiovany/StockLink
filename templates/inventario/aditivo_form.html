@@ -27,7 +27,7 @@
           {% if form.tipo.errors %}<div class="text-danger small">{{ form.tipo.errors|striptags }}</div>{% endif %}
         </div>
 
-        <div id="bloco-maquinas" class="mb-3 border rounded-3 p-2" style="background:#f8fafc;">
+        <div id="bloco-maquinas" class="mb-3 border rounded-3 p-2 bg-body-tertiary">
           <label class="form-label mb-1">{{ form.equipamentos.label }}</label>
           {% if form.equipamentos.field.queryset %}
             <div class="mb-2 d-flex align-items-center">

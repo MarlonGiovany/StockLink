@@ -43,7 +43,7 @@
       <a href="{% url 'chamado_lista' %}?status=ENCERRADO"
          class="btn {% if status == 'ENCERRADO' %}btn-success{% else %}btn-outline-success{% endif %}">
         ✅ Encerrados
-        {% if qtd_encerrados %}<span class="badge bg-light text-dark ms-1">{{ qtd_encerrados }}</span>{% endif %}
+        {% if qtd_encerrados %}<span class="badge bg-body-secondary text-body ms-1">{{ qtd_encerrados }}</span>{% endif %}
       </a>
       <a href="{% url 'chamado_lista' %}?status="
          class="btn {% if not status %}btn-secondary{% else %}btn-outline-secondary{% endif %}">
@@ -217,7 +217,7 @@
           <td class="cel-acoes text-end text-nowrap">
             <div class="acoes d-inline-flex gap-1 align-items-center">
               {% if c.arquivo_os %}
-                <span class="badge bg-light text-dark border align-self-center" title="OS digitalizada anexada">📎</span>
+                <span class="badge bg-body-secondary text-body border align-self-center" title="OS digitalizada anexada">📎</span>
               {% endif %}
               <a href="{% url 'chamado_imprimir' c.pk %}" target="_blank"
                  class="btn btn-sm btn-outline-secondary btn-imprimir" title="Imprimir a OS física">🖨️</a>

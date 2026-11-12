@@ -14,7 +14,7 @@
           {% csrf_token %}
 
           {# ---------- 1) PRODUTO — bloco em destaque, no topo ---------- #}
-          <div class="border rounded-3 p-3 mb-4" style="background:#f8fafc; border-color:#dbe3ef !important;">
+          <div class="border rounded-3 p-3 mb-4 bg-body-tertiary">
             <h6 class="text-uppercase text-muted small fw-bold mb-1">Produto</h6>
             <p class="small text-muted mb-2">Escolha o que você está cadastrando.</p>
 
@@ -42,8 +42,7 @@
           </div>
 
           {# ---------- 2) CONFIGURAÇÃO — só para Desktop / Notebook ---------- #}
-          <div id="bloco-configuracao" class="border rounded-3 p-3 mb-4 d-none"
-               style="background:#f2f8f4; border-color:#cfe6d7 !important;">
+          <div id="bloco-configuracao" class="border border-success-subtle rounded-3 p-3 mb-4 d-none bg-success-subtle">
             <h6 class="text-uppercase text-muted small fw-bold mb-1">Configuração</h6>
             <p class="small text-muted mb-3">Ficha técnica do equipamento.</p>
             <div class="row g-3">

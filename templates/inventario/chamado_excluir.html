@@ -35,7 +35,7 @@
         {% for c in chamados %}<input type="hidden" name="chamados" value="{{ c.pk }}">{% endfor %}
         <input type="hidden" name="confirmar" value="1">
         {% if apaga_todos %}
-          <div class="form-check mb-3 p-2 ps-4 border rounded-3" style="background:#f8fafc;">
+          <div class="form-check mb-3 p-2 ps-4 border rounded-3 bg-body-tertiary">
             <input class="form-check-input" type="checkbox" name="recomecar" id="recomecar" checked>
             <label class="form-check-label" for="recomecar">
               <strong>Recomeçar a numeração das OS em 0001</strong><br>
