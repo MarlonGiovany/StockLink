@@ -29,7 +29,7 @@
   {% if cliente_atual %}<input type="hidden" name="cliente" value="{{ cliente_atual.pk }}">{% endif %}
   <div class="{% if status_atual %}col-md-5{% else %}col-md-7{% endif %}">
     <input type="text" name="q" value="{{ termo }}" class="form-control"
-           placeholder="Buscar por marca, modelo, série, INF, local, cliente ou contrato...">
+           placeholder="Buscar por marca, modelo, série, INF, local, setor, cliente ou contrato...">
   </div>
   <div class="col-md-3">
     <select name="status" class="form-select">
@@ -57,7 +57,7 @@
       <thead class="table-light">
         <tr>
           <th>INF</th><th>Produto</th><th>Marca</th><th>Modelo</th><th>Série</th>
-          <th>Local</th><th>Status</th><th>Manut.</th><th></th>
+          <th>Local</th><th>Setor</th><th>Status</th><th>Manut.</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -69,6 +69,7 @@
           <td>{{ eq.modelo }}</td>
           <td>{{ eq.numero_serie|default:"—" }}</td>
           <td>{{ eq.local|default:"—" }}</td>
+          <td>{{ eq.setor|default:"—" }}</td>
           <td>
             {% if eq.status == "DISPONIVEL" %}<span class="badge bg-success badge-status">Disponível</span>
             {% elif eq.status == "LOCADO" %}<span class="badge bg-primary badge-status">Locado</span>
@@ -90,7 +91,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="9" class="text-center text-muted py-4">Nenhum equipamento encontrado.</td></tr>
+        <tr><td colspan="10" class="text-center text-muted py-4">Nenhum equipamento encontrado.</td></tr>
         {% endfor %}
       </tbody>
     </table>

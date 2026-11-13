@@ -169,7 +169,9 @@ A caixa do topo mostra o número em corpo grande justamente para isso.
       </tr>
       <tr>
         <td class="rot">Localização</td>
-        <td colspan="3">{{ chamado.equipamento.local|default:"&mdash;" }}</td>
+        <td>{{ chamado.equipamento.local|default:"&mdash;" }}</td>
+        <td class="rot">Setor</td>
+        <td>{{ chamado.equipamento.setor|default:"&mdash;" }}</td>
       </tr>
     </table>
   </div>

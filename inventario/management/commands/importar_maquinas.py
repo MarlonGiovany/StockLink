@@ -7,6 +7,8 @@ Uso:
 O CSV (separado por ponto e vírgula, com cabeçalho) tem as colunas:
     inf;produto;marca;modelo;serie;local
 
+e pode ter também a coluna opcional "setor" (ex.: UTI 2, Recepção).
+
 Cada linha vira:
   - um equipamento com status Locado;
   - uma locação ativa para o cliente, começando hoje, com valor R$ 0,00 e sem
@@ -35,6 +37,7 @@ from inventario.models import (
 )
 
 COLUNAS = ("inf", "produto", "marca", "modelo", "serie", "local")
+OPCIONAIS = ("setor",)
 
 
 class Command(BaseCommand):
@@ -82,6 +85,7 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"  INF {linha['inf']:<8} {linha['produto']:<11} {linha['marca']:<8} "
                 f"{linha['modelo']:<11} série {linha['serie']:<12} local: {linha['local']}"
+                + (f" — {linha['setor']}" if linha["setor"] else "")
             )
         if erros:
             raise CommandError("Nada foi gravado:\n  " + "\n  ".join(erros))
@@ -101,13 +105,14 @@ class Command(BaseCommand):
                     numero_serie=linha["serie"],
                     numero_patrimonio=linha["inf"],
                     local=linha["local"],
+                    setor=linha["setor"],
                     status=Equipamento.Status.LOCADO,
                 )
                 Movimentacao.objects.create(
                     equipamento=equipamento, tipo=Movimentacao.Tipo.CADASTRO,
                     descricao=(
                         f"{equipamento.produto} cadastrado em "
-                        f"'{equipamento.local or 'sem local'}' (importação em lote)."
+                        f"'{equipamento.local_e_setor or 'sem local'}' (importação em lote)."
                     ),
                 )
                 locacao = Locacao.objects.create(
@@ -136,7 +141,7 @@ class Command(BaseCommand):
                         f"Esperado: {';'.join(COLUNAS)}"
                     )
                 linhas = [
-                    {c: (linha.get(c) or "").strip() for c in COLUNAS}
+                    {c: (linha.get(c) or "").strip() for c in COLUNAS + OPCIONAIS}
                     for linha in leitor
                     if any((v or "").strip() for v in linha.values())
                 ]

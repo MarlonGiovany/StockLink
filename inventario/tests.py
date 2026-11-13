@@ -2827,7 +2827,7 @@ class PlanilhasTests(BaseComPerfis):
         dados = {l[2]: l for l in linhas[1:]}
         self.assertEqual(set(dados), {"INF-1002", "INF-1003"})
         self.assertEqual(dados["INF-1002"][0], "RODOVIÁRIO")
-        self.assertEqual(dados["INF-1002"][9], 250)       # número, não texto
+        self.assertEqual(dados["INF-1002"][linhas[0].index("Valor da locação")], 250)  # número, não texto
         self.assertEqual(dados["INF-1002"][-1], contrato.identificacao)
 
     def test_so_de_um_cliente(self):
@@ -3311,3 +3311,103 @@ class PaginacaoDaListaDeEquipamentosTests(BaseLogada):
     def test_poucos_resultados_nao_mostram_navegacao(self):
         resposta = self._lista(q="OPTIPLEX")
         self.assertNotContains(resposta, "Página 1 de")
+
+
+class SetorDoEquipamentoTests(BaseLogada):
+    """O setor dentro do local (UTI, Recepção...) tem campo próprio, em vez
+    de ir parar nas Observações."""
+
+    def setUp(self):
+        super().setUp()
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1001")
+
+    def dados(self, **extra):
+        dados = {
+            "produto": self.desktop.pk, "marca": "DELL", "modelo": "OPTIPLEX",
+            "numero_serie": "", "numero_patrimonio": "1001",
+            "processador": "", "memoria_ram": "", "armazenamento": "",
+            "valor_compra": "", "data_aquisicao": "", "fornecedor": "",
+            "local": "Hospital Renascença", "setor": "", "status": "DISPONIVEL",
+            "observacoes": "",
+        }
+        dados.update(extra)
+        return dados
+
+    def test_cadastro_grava_o_setor_e_registra_no_historico(self):
+        self.client.post(reverse("equipamento_novo"), self.dados(
+            numero_patrimonio="5000", setor="UTI 2",
+        ))
+        eq = Equipamento.objects.get(numero_patrimonio="5000")
+        self.assertEqual(eq.setor, "UTI 2")
+        self.assertIn("'Hospital Renascença — UTI 2'",
+                      eq.movimentacoes.get(tipo=Movimentacao.Tipo.CADASTRO).descricao)
+
+    def test_setor_e_opcional(self):
+        self.client.post(reverse("equipamento_novo"), self.dados(numero_patrimonio="5001"))
+        self.assertEqual(Equipamento.objects.get(numero_patrimonio="5001").setor, "")
+
+    def test_troca_de_setor_entra_no_historico(self):
+        self.client.post(reverse("equipamento_editar", args=[self.maquina.pk]),
+                         self.dados(setor="Recepção"))
+        self.client.post(reverse("equipamento_editar", args=[self.maquina.pk]),
+                         self.dados(setor="Faturamento"))
+        descricoes = list(self.maquina.movimentacoes.filter(
+            tipo=Movimentacao.Tipo.LOCAL, descricao__startswith="Setor"
+        ).values_list("descricao", flat=True))
+        self.assertCountEqual(descricoes, [
+            "Setor: '—' → 'Recepção'.",
+            "Setor: 'Recepção' → 'Faturamento'.",
+        ])
+
+    def test_editar_sem_mudar_setor_nao_registra(self):
+        Equipamento.objects.filter(pk=self.maquina.pk).update(
+            local="Hospital Renascença", setor="UTI"
+        )
+        self.client.post(reverse("equipamento_editar", args=[self.maquina.pk]),
+                         self.dados(setor="UTI"))
+        self.assertFalse(self.maquina.movimentacoes.filter(
+            descricao__startswith="Setor").exists())
+
+    def test_aparece_na_ficha_e_na_lista(self):
+        Equipamento.objects.filter(pk=self.maquina.pk).update(setor="Almoxarifado")
+        ficha = self.client.get(reverse("equipamento_detalhe", args=[self.maquina.pk]))
+        self.assertContains(ficha, "<th>Setor</th><td>Almoxarifado</td>", html=True)
+        lista = self.client.get(reverse("equipamento_lista"), {"produto": "todos"})
+        self.assertContains(lista, "<th>Setor</th>", html=True)
+        self.assertContains(lista, "<td>Almoxarifado</td>", html=True)
+
+    def test_busca_encontra_pelo_setor(self):
+        Equipamento.objects.filter(pk=self.maquina.pk).update(setor="Faturamento")
+        resposta = self.client.get(reverse("equipamento_lista"), {"q": "faturamento"})
+        self.assertEqual(list(resposta.context["equipamentos"]), [self.maquina])
+
+    def test_local_e_setor(self):
+        casos = [("Hospital X", "UTI", "Hospital X — UTI"), ("Hospital X", "", "Hospital X"),
+                 ("", "UTI", "UTI"), ("", "", "")]
+        for local, setor, esperado in casos:
+            with self.subTest(local=local, setor=setor):
+                self.assertEqual(Equipamento(local=local, setor=setor).local_e_setor, esperado)
+
+    def test_excel_da_lista_traz_o_setor(self):
+        from openpyxl import load_workbook
+        Equipamento.objects.filter(pk=self.maquina.pk).update(setor="UTI 2")
+        resposta = self.client.get(reverse("planilha_equipamentos"),
+                                   {"produto": "todos", "status": "DISPONIVEL", "q": "1001"})
+        linhas = list(load_workbook(io.BytesIO(resposta.content)).active.iter_rows(values_only=True))
+        self.assertEqual(linhas[1][linhas[0].index("Setor")], "UTI 2")
+
+    def test_importacao_aceita_setor_opcional(self):
+        cliente = Cliente.objects.create(nome="HOSPITAL TESTE")
+        pasta = tempfile.mkdtemp()
+        com, sem = os.path.join(pasta, "com.csv"), os.path.join(pasta, "sem.csv")
+        with open(com, "w", encoding="utf-8") as f:
+            f.write("inf;produto;marca;modelo;serie;local;setor\n"
+                    "6000;Impressora;EPSON;L3250;S6000;Hospital Teste;UTI 2\n")
+        with open(sem, "w", encoding="utf-8") as f:
+            f.write("inf;produto;marca;modelo;serie;local\n"
+                    "6001;Impressora;EPSON;L3250;S6001;Hospital Teste\n")
+        for caminho in (com, sem):
+            call_command("importar_maquinas", caminho, "--cliente", str(cliente.pk),
+                         "--confirmar", stdout=io.StringIO())
+        self.assertEqual(Equipamento.objects.get(numero_patrimonio="6000").setor, "UTI 2")
+        self.assertEqual(Equipamento.objects.get(numero_patrimonio="6001").setor, "")

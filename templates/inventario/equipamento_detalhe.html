@@ -42,6 +42,7 @@
             <tr><th>Armazenamento</th><td>{{ equipamento.armazenamento|default:"—" }}</td></tr>
           {% endif %}
           <tr><th>Local</th><td>{{ equipamento.local|default:"—" }}</td></tr>
+          <tr><th>Setor</th><td>{{ equipamento.setor|default:"—" }}</td></tr>
           <tr><th>Status</th><td>{{ equipamento.get_status_display }}</td></tr>
           <tr><th>Valor de compra</th><td>{% if equipamento.valor_compra %}R$ {{ equipamento.valor_compra }}{% else %}—{% endif %}</td></tr>
           <tr><th>Data de aquisição</th><td>{{ equipamento.data_aquisicao|date:"d/m/Y"|default:"—" }}</td></tr>

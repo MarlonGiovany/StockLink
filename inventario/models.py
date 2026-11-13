@@ -118,6 +118,12 @@ class Equipamento(models.Model):
 
     # Situação atual
     local = models.CharField("Localização atual", max_length=120, blank=True)
+    # Onde a máquina está dentro do local (ex.: "UTI 2", "Recepção"). Antes
+    # isso ia parar nas Observações, que não servem para isso.
+    setor = models.CharField(
+        "Setor", max_length=120, blank=True,
+        help_text="Setor dentro do local. Ex.: Recepção, UTI 2, Faturamento.",
+    )
     status = models.CharField(
         "Status", max_length=15, choices=Status.choices, default=Status.DISPONIVEL
     )
@@ -133,6 +139,11 @@ class Equipamento(models.Model):
 
     def __str__(self):
         return f"{self.marca} {self.modelo} (INF-{self.numero_patrimonio})"
+
+    @property
+    def local_e_setor(self):
+        """"Hospital X — UTI 2", ou só um dos dois, ou "" se nenhum."""
+        return " — ".join(p for p in (self.local, self.setor) if p)
 
     @property
     def locacao_ativa(self):

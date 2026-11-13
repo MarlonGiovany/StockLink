@@ -70,7 +70,7 @@ def maquinas_locadas(cliente=None, com_contrato=False):
     O número do contrato só entra para quem pode ver a aba Contratos.
     """
     cabecalho = ["Cliente", "CPF/CNPJ", "INF", "Produto", "Marca", "Modelo",
-                 "Nº de série", "Local", "Início da locação", "Valor da locação"]
+                 "Nº de série", "Local", "Setor", "Início da locação", "Valor da locação"]
     if com_contrato:
         cabecalho.append("Contrato")
     livro, folha = _planilha("Máquinas locadas", cabecalho)
@@ -88,14 +88,14 @@ def maquinas_locadas(cliente=None, com_contrato=False):
         linha = [
             loc.cliente.nome, loc.cliente.documento, f"INF-{m.numero_patrimonio}",
             m.produto.nome if m.produto else "", m.marca, m.modelo,
-            m.numero_serie, m.local, loc.data_inicio, loc.valor,
+            m.numero_serie, m.local, m.setor, loc.data_inicio, loc.valor,
         ]
         if com_contrato:
             linha.append(loc.contrato.identificacao if loc.contrato else "")
         _adiciona_linha(folha, linha)
 
-    _formata(folha, 9, FORMATO_DATA)
-    _formata(folha, 10, FORMATO_REAIS)
+    _formata(folha, 10, FORMATO_DATA)
+    _formata(folha, 11, FORMATO_REAIS)
     _acerta_colunas(folha)
     return livro
 
@@ -129,6 +129,7 @@ def equipamentos(maquinas, titulo, com_locacao=False, com_contrato=False):
         ("Nº de série", lambda m, l: m.numero_serie, None),
         ("Status", lambda m, l: m.get_status_display(), None),
         ("Local", lambda m, l: m.local, None),
+        ("Setor", lambda m, l: m.setor, None),
     ]
     if com_locacao:
         colunas += [

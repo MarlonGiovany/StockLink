@@ -41,7 +41,7 @@ na primeira carga da página e, de 15 em 15 segundos, na resposta JSON de
         <div class="text-secondary mb-2">
           {% if c.equipamento.produto %}{{ c.equipamento.produto }} · {% endif %}
           {{ c.equipamento.marca }} {{ c.equipamento.modelo }}
-          {% if c.equipamento.local %}<br>📍 {{ c.equipamento.local }}{% endif %}
+          {% if c.equipamento.local_e_setor %}<br>📍 {{ c.equipamento.local_e_setor }}{% endif %}
         </div>
 
         <div class="os-descricao mb-2">{{ c.descricao|truncatechars:160 }}</div>
