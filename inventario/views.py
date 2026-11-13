@@ -167,7 +167,7 @@ def _ids_que_batem_com_a_busca(equipamentos, termo):
     """Ids dos equipamentos em que o termo aparece em algum campo (OR).
 
     Olha os dados da própria máquina (marca, modelo, série, INF, local,
-    produto) e também o cliente e o contrato da locação ativa. Assim,
+    setor, produto) e também o cliente e o contrato da locação ativa. Assim,
     "Renascença" traz tanto o que está locado para o Hospital Renascença
     quanto o que está fisicamente lá.
 
@@ -180,7 +180,7 @@ def _ids_que_batem_com_a_busca(equipamentos, termo):
     ids = set()
 
     campos = ("marca", "modelo", "numero_serie", "numero_patrimonio",
-              "local", "produto__nome")
+              "local", "setor", "produto__nome")
     for pk, *valores in equipamentos.values_list("pk", *campos):
         if any(alvo in _chave_alfabetica(v or "") for v in valores):
             ids.add(pk)
@@ -259,7 +259,7 @@ def equipamento_novo(request):
                 equipamento,
                 Movimentacao.Tipo.CADASTRO,
                 f"{equipamento.produto or 'Equipamento'} cadastrado em "
-                f"'{equipamento.local or 'sem local'}'.",
+                f"'{equipamento.local_e_setor or 'sem local'}'.",
                 request.user,
             )
             messages.success(request, "Equipamento cadastrado com sucesso.")
@@ -355,6 +355,7 @@ def produto_novo(request):
 def equipamento_editar(request, pk):
     equipamento = get_object_or_404(Equipamento, pk=pk)
     local_antigo = equipamento.local
+    setor_antigo = equipamento.setor
     status_antigo = equipamento.status
 
     if request.method == "POST":
@@ -365,6 +366,12 @@ def equipamento_editar(request, pk):
                 registrar_movimentacao(
                     equipamento, Movimentacao.Tipo.LOCAL,
                     f"Localização: '{local_antigo or '—'}' → '{equipamento.local or '—'}'.",
+                    request.user,
+                )
+            if setor_antigo != equipamento.setor:
+                registrar_movimentacao(
+                    equipamento, Movimentacao.Tipo.LOCAL,
+                    f"Setor: '{setor_antigo or '—'}' → '{equipamento.setor or '—'}'.",
                     request.user,
                 )
             if status_antigo != equipamento.status:

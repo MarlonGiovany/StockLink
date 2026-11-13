@@ -161,12 +161,12 @@ class EquipamentoAdmin(admin.ModelAdmin):
     form = EquipamentoAdminForm
     list_display = (
         "numero_patrimonio", "produto", "marca", "modelo", "numero_serie",
-        "local", "status",
+        "local", "setor", "status",
     )
     list_filter = ("produto", "status", "marca", "fornecedor")
     search_fields = (
         "marca", "modelo", "numero_serie", "numero_patrimonio", "local",
-        "produto__nome",
+        "setor", "produto__nome",
     )
     inlines = [ManutencaoInline, LocacaoInline, MovimentacaoInline]
 

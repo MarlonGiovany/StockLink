@@ -164,7 +164,7 @@ class EquipamentoForm(BootstrapFormMixin, forms.ModelForm):
             "marca", "modelo", "numero_serie", "numero_patrimonio",
             "processador", "memoria_ram", "armazenamento",
             "valor_compra", "data_aquisicao", "fornecedor",
-            "local", "status", "observacoes",
+            "local", "setor", "status", "observacoes",
         ]
         widgets = {
             "data_aquisicao": forms.DateInput(
