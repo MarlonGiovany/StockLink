@@ -9,7 +9,7 @@
     <tbody>
       {% for l in linhas %}
       <tr>
-        <td><a href="{% url 'chamado_detalhe' l.chamado.pk %}">{{ l.numero }}</a></td>
+        <td>{% if perms.inventario.view_chamado %}<a href="{% url 'chamado_detalhe' l.chamado.pk %}">{{ l.numero }}</a>{% else %}{{ l.numero }}{% endif %}</td>
         <td>{{ l.cliente }}</td>
         <td>{{ l.equipamento }}</td>
         <td>{{ l.tecnico }}</td>

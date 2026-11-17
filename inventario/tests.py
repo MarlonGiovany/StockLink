@@ -3814,3 +3814,114 @@ class DashboardGerencialTests(BaseLogada):
         self.assertEqual(self.client.get(reverse("dashboard_excel")).status_code, 403)
         comum.user_permissions.add(Permission.objects.get(codename="ver_dashboard"))
         self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
+
+
+class PerfilFinanceiroTests(BaseLogada):
+    """Financeiro: contratos, dashboard, clientes e fornecedores; equipamento
+    só para consulta; chamados, nem ver nem abrir."""
+
+    def setUp(self):
+        super().setUp()
+        from django.contrib.auth.models import Group
+        from .permissoes import aplica_perfil
+        self.analista = self.user
+        self.fin = get_user_model().objects.create_user("financeiro1", password="x")
+        aplica_perfil(self.fin, "financeiro")
+        self.assertTrue(self.fin.groups.filter(name="Financeiro").exists())
+        self.Group = Group
+        self.cliente = Cliente.objects.create(nome="PADARIA")
+        self.contrato = Contrato.objects.create(cliente=self.cliente, valor=Decimal("500"))
+        self.maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        Locacao.objects.create(
+            equipamento=self.maquina, cliente=self.cliente, contrato=self.contrato,
+            valor=Decimal("100"), data_inicio="2026-10-01",
+        )
+        self.chamado = Chamado.objects.create(
+            equipamento=self.maquina, cliente=self.cliente, descricao="x",
+        )
+        self.client.force_login(self.fin)
+
+    def status(self, nome, *args, metodo="get", dados=None):
+        url = reverse(nome, args=args)
+        resposta = self.client.post(url, dados or {}) if metodo == "post" else self.client.get(url)
+        return resposta.status_code
+
+    def test_ve_contratos_dashboard_clientes_fornecedores_e_equipamentos(self):
+        for nome, args in [
+            ("contrato_lista", []), ("contrato_detalhe", [self.contrato.pk]),
+            ("contrato_novo", []), ("contrato_editar", [self.contrato.pk]),
+            ("contrato_cancelar", [self.contrato.pk]), ("aditivo_novo", [self.contrato.pk]),
+            ("dashboard", []), ("cliente_lista", []), ("cliente_novo", []),
+            ("cliente_detalhe", [self.cliente.pk]), ("cliente_editar", [self.cliente.pk]),
+            ("fornecedor_lista", []), ("fornecedor_novo", []),
+            ("equipamento_lista", []), ("equipamento_detalhe", [self.maquina.pk]),
+        ]:
+            with self.subTest(tela=nome):
+                self.assertEqual(self.status(nome, *args), 200)
+
+    def test_nao_exclui_contrato_cliente_nem_fornecedor(self):
+        self.assertEqual(self.status("contrato_excluir", self.contrato.pk), 403)
+        self.assertEqual(self.status("cliente_excluir", self.cliente.pk), 403)
+
+    def test_equipamento_so_consulta(self):
+        for nome, args in [
+            ("equipamento_novo", []), ("equipamento_editar", [self.maquina.pk]),
+            ("equipamento_excluir", [self.maquina.pk]), ("manutencao_nova", [self.maquina.pk]),
+            ("locacao_nova", [self.maquina.pk]),
+        ]:
+            with self.subTest(tela=nome):
+                self.assertEqual(self.status(nome, *args), 403)
+        locacao = self.maquina.locacoes.get()
+        self.assertEqual(self.status("locacao_encerrar", locacao.pk, metodo="post"), 403)
+        locacao.refresh_from_db()
+        self.assertTrue(locacao.ativa)
+        ficha = self.client.get(reverse("equipamento_detalhe", args=[self.maquina.pk]))
+        self.assertNotContains(ficha, reverse("equipamento_editar", args=[self.maquina.pk]))
+        self.assertNotContains(ficha, "Registrar devolução")
+
+    def test_nao_ve_nem_abre_chamados(self):
+        for nome, args in [
+            ("chamado_lista", []), ("chamado_novo", []), ("chamado_painel", []),
+            ("chamado_historico", []), ("chamado_detalhe", [self.chamado.pk]),
+            ("chamado_imprimir", [self.chamado.pk]), ("chamado_editar", [self.chamado.pk]),
+            ("chamado_painel_dados", []), ("chamado_painel_sinal", []),
+        ]:
+            with self.subTest(tela=nome):
+                self.assertEqual(self.status(nome, *args), 403)
+        self.assertEqual(
+            self.status("chamado_novo", metodo="post", dados={"descricao": "x"}), 403
+        )
+        self.assertEqual(Chamado.objects.count(), 1)
+
+    def test_menu_e_ficha_do_cliente_sem_chamados(self):
+        tela = self.client.get(reverse("cliente_detalhe", args=[self.cliente.pk]))
+        self.assertNotContains(tela, reverse("chamado_lista"))
+        self.assertNotContains(tela, "Últimos chamados")
+        self.assertContains(tela, reverse("contrato_lista"))
+        self.assertContains(tela, reverse("dashboard"))
+
+    def test_ajusta_valor_em_lote_do_contrato(self):
+        locacao = self.maquina.locacoes.get()
+        self.client.post(
+            reverse("locacao_valor_em_lote", args=[self.contrato.pk]),
+            {"valor": "250.00", "locacoes": [locacao.pk]},
+        )
+        locacao.refresh_from_db()
+        self.assertEqual(locacao.valor, Decimal("250"))
+
+    def test_perfil_aparece_na_tela_de_permissoes_e_tecnico_continua_vendo_chamados(self):
+        from .permissoes import aplica_perfil
+        self.client.force_login(self.analista)
+        tela = self.client.get(reverse("permissoes_usuarios"))
+        self.assertContains(tela, "Financeiro")
+        tecnico = get_user_model().objects.create_user("tec1", password="x")
+        aplica_perfil(tecnico, "tecnico")
+        self.client.force_login(tecnico)
+        self.assertEqual(self.client.get(reverse("chamado_lista")).status_code, 200)
+
+    def test_trocar_de_financeiro_para_tecnico_tira_o_grupo(self):
+        from .permissoes import aplica_perfil, perfil_do_usuario
+        aplica_perfil(self.fin, "tecnico")
+        grupos = {g.name for g in self.fin.groups.all()}
+        self.assertEqual(grupos, {"Técnico"})
+        self.assertEqual(perfil_do_usuario(self.fin, grupos), "tecnico")

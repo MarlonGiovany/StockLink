@@ -17,9 +17,12 @@ Perfis
   e PDFs, menos dar permissões.
 * **Técnico** — cadastra equipamento, registra manutenção e cuida só
   das OS dele.
+* **Financeiro** — Contratos (tudo, menos excluir), PDFs, Dashboard
+  Gerencial, clientes e fornecedores (cadastra e edita, não exclui). Só
+  consulta os equipamentos e não vê nem abre chamados.
 
-Recepção e Técnico são grupos (ver a migração 0018) e não precisam ser
-superusuários para trabalhar.
+Recepção, Técnico e Financeiro são grupos (migrações 0018 e 0025) e não
+precisam ser superusuários para trabalhar.
 
 Áreas restritas
 ---------------
@@ -49,6 +52,8 @@ VER_DASHBOARD = "ver_dashboard"
 # Grupos dos perfis que não são superusuário (criados na migração 0018)
 GRUPO_TECNICO = "Técnico"
 GRUPO_RECEPCAO = "Recepção"
+GRUPO_FINANCEIRO = "Financeiro"
+GRUPOS_DE_PERFIL = [GRUPO_TECNICO, GRUPO_RECEPCAO, GRUPO_FINANCEIRO]
 
 # Perfis que o Analista escolhe na tela de permissões: (código, nome, ajuda)
 PERFIS = [
@@ -57,6 +62,10 @@ PERFIS = [
     ("recepcao", GRUPO_RECEPCAO,
      "Tudo no sistema — clientes, fornecedores, equipamentos, chamados, "
      "contratos e PDFs, inclusive excluir —, menos dar permissões."),
+    ("financeiro", GRUPO_FINANCEIRO,
+     "Contratos (tudo, menos excluir), PDFs e Dashboard Gerencial; cadastra e "
+     "edita clientes e fornecedores. Só consulta os equipamentos e não vê "
+     "nem abre chamados."),
     ("super", "Superusuário",
      "Faz tudo nas telas e entra no /admin/, mas não mexe em usuários e permissões."),
 ]
@@ -99,12 +108,34 @@ def ve_todos_os_chamados(user):
     )
 
 
+def pode_ver_chamados(user):
+    """O Financeiro não vê chamados; Técnico, Recepção e superusuário veem."""
+    return bool(user and user.is_authenticated) and user.has_perm(
+        "inventario.view_chamado"
+    )
+
+
+def exige_chamados(view):
+    """Decorator de view: barra quem não pode ver chamados (403)."""
+
+    def wrapper(request, *args, **kwargs):
+        if not pode_ver_chamados(request.user):
+            raise PermissionDenied
+        return view(request, *args, **kwargs)
+
+    wrapper.__name__ = view.__name__
+    wrapper.__doc__ = view.__doc__
+    return wrapper
+
+
 def perfil_do_usuario(usuario, grupos):
     """O perfil que a tela mostra marcado para o usuário (ou "" se nenhum)."""
     if usuario.is_superuser:
         return "super"
     if GRUPO_RECEPCAO in grupos:
         return "recepcao"
+    if GRUPO_FINANCEIRO in grupos:
+        return "financeiro"
     if GRUPO_TECNICO in grupos:
         return "tecnico"
     return ""
@@ -121,14 +152,15 @@ def aplica_perfil(usuario, perfil):
     extras = diretas_fora_das_areas(usuario)
     if extras:
         usuario.user_permissions.remove(*extras)
-    grupos = {g.name: g for g in Group.objects.filter(
-        name__in=[GRUPO_TECNICO, GRUPO_RECEPCAO]
-    )}
+    grupos = {g.name: g for g in Group.objects.filter(name__in=GRUPOS_DE_PERFIL)}
     usuario.groups.remove(*grupos.values())
-    if perfil == "tecnico" and GRUPO_TECNICO in grupos:
-        usuario.groups.add(grupos[GRUPO_TECNICO])
-    elif perfil == "recepcao" and GRUPO_RECEPCAO in grupos:
-        usuario.groups.add(grupos[GRUPO_RECEPCAO])
+    do_perfil = {
+        "tecnico": GRUPO_TECNICO,
+        "recepcao": GRUPO_RECEPCAO,
+        "financeiro": GRUPO_FINANCEIRO,
+    }.get(perfil)
+    if do_perfil in grupos:
+        usuario.groups.add(grupos[do_perfil])
     # is_staff junto: sem ele o superusuário não entra no /admin/
     super_ = perfil == "super"
     if usuario.is_superuser != super_ or usuario.is_staff != super_:

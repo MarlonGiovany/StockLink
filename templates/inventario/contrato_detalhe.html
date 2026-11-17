@@ -83,7 +83,7 @@
           <table class="table table-sm table-hover align-middle mb-0">
             <thead class="table-light">
               <tr>
-                {% if perms.inventario.change_locacao %}
+                {% if perms.inventario.change_contrato %}
                   <th style="width:2.5rem;">
                     <input type="checkbox" class="form-check-input" id="marcar-todas"
                            title="Marcar todas as ativas">
@@ -96,7 +96,7 @@
             <tbody>
               {% for l in locacoes %}
               <tr>
-                {% if perms.inventario.change_locacao %}
+                {% if perms.inventario.change_contrato %}
                   <td>
                     {% if l.ativa %}
                       <input type="checkbox" class="form-check-input marca-locacao"
@@ -136,7 +136,7 @@
           </table>
         </div>
 
-        {% if perms.inventario.change_locacao and qtd_maquinas %}
+        {% if perms.inventario.change_contrato and qtd_maquinas %}
           <div class="border rounded-3 p-2 mt-3 bg-body-tertiary">
             <div class="row g-2 align-items-end">
               <div class="col-md-5">

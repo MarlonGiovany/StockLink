@@ -61,7 +61,9 @@ from .permissoes import (
     exige_analista,
     eh_analista,
     exige_area,
+    exige_chamados,
     perfil_do_usuario,
+    pode_ver_chamados,
     pode_ver_contratos,
     usuario_analista,
     ve_todos_os_chamados,
@@ -892,7 +894,7 @@ def _reais(valor):
 
 
 @login_required
-@permission_required("inventario.change_locacao", raise_exception=True)
+@permission_required("inventario.change_contrato", raise_exception=True)
 @exige_area(VER_CONTRATOS)
 def locacao_valor_em_lote(request, pk):
     """Aplica um mesmo valor de locação a várias máquinas do contrato de uma vez.
@@ -1543,6 +1545,8 @@ def _chamados_visiveis(user):
     Técnico: só as OS designadas a ele. Recepção e superusuário: todas
     (ver `ve_todos_os_chamados`).
     """
+    if not pode_ver_chamados(user):
+        return Chamado.objects.none()
     chamados = Chamado.objects.all()
     if not ve_todos_os_chamados(user):
         chamados = chamados.filter(tecnico=user)
@@ -1613,6 +1617,7 @@ def _chamados_filtrados(request, status_padrao=None):
 
 
 @login_required
+@exige_chamados
 def chamado_lista(request):
     """Painel de chamados: tudo que a recepção abriu, com filtros.
 
@@ -1643,6 +1648,7 @@ def chamado_lista(request):
 
 @login_required
 @permission_required("inventario.add_chamado", raise_exception=True)
+@exige_chamados
 def chamado_novo(request):
     """Abertura do chamado na recepção.
 
@@ -1669,6 +1675,7 @@ def chamado_novo(request):
 
 @login_required
 @permission_required("inventario.add_chamado", raise_exception=True)
+@exige_chamados
 def chamado_editar(request, pk):
     """Corrige cliente, urgência, descrição, técnico ou quem pediu.
 
@@ -1772,6 +1779,7 @@ def _recomeca_numeracao_das_os():
 
 
 @login_required
+@exige_chamados
 def chamado_detalhe(request, pk):
     """A Ordem de Serviço: a ficha completa do chamado.
 
@@ -1934,6 +1942,7 @@ def _painel_dados():
 
 
 @login_required
+@exige_chamados
 def chamado_imprimir(request, pk):
     """A Ordem de Serviço em papel, do jeito que vai para a impressora.
 
@@ -1955,6 +1964,7 @@ def chamado_imprimir(request, pk):
 
 
 @login_required
+@exige_chamados
 def chamado_arquivo(request, pk):
     """Abre a OS digitalizada anexada ao chamado.
 
@@ -1979,6 +1989,7 @@ def chamado_arquivo(request, pk):
 
 
 @login_required
+@exige_chamados
 def chamado_painel(request):
     """Painel da área técnica — a tela que fica no monitor transmitindo.
 
@@ -2009,6 +2020,8 @@ def chamado_painel_dados(request):
     """
     if not request.user.is_authenticated:
         return JsonResponse({"erro": "sessao_expirada"}, status=401)
+    if not pode_ver_chamados(request.user):
+        return JsonResponse({"erro": "sem_permissao"}, status=403)
 
     dados = _painel_dados()
     resposta = JsonResponse({
@@ -2044,12 +2057,15 @@ def chamado_painel_sinal(request):
     """
     if not request.user.is_authenticated:
         return JsonResponse({"erro": "sessao_expirada"}, status=401)
+    if not pode_ver_chamados(request.user):
+        return JsonResponse({"erro": "sem_permissao"}, status=403)
     resposta = JsonResponse({"marca": _marca_chamados()})
     resposta["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
     return resposta
 
 
 @login_required
+@exige_chamados
 def chamado_historico(request):
     """Histórico por técnico, para o gerente técnico.
 

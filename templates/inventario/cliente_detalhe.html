@@ -58,6 +58,7 @@
 <p class="small text-muted">Mais {{ vinculos.locacoes_encerradas }} locação(ões) já encerrada(s) no histórico.</p>
 {% endif %}
 
+{% if perms.inventario.view_chamado %}
 <div class="d-flex justify-content-between align-items-center mb-2">
   <h5 class="mb-0">Últimos chamados</h5>
   {% if chamados %}
@@ -82,4 +83,5 @@
     </tbody>
   </table>
 </div></div>
+{% endif %}
 {% endblock %}
