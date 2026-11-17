@@ -1,0 +1,19 @@
+{% comment %}Ranking de clientes por quantidade (top 5). Recebe: linhas [(cliente, qtd)], cor, vazio, alvo.{% endcomment %}
+{% if linhas %}
+  {% with maior=linhas.0.1 %}
+  <table class="table table-sm table-borderless mb-0 dg-ranking">
+    {% for nome, qtd in linhas|slice:":5" %}
+    <tr>
+      <td class="text-truncate" style="max-width:0;width:55%;" title="{{ nome }}">{{ nome }}</td>
+      <td style="width:35%;"><div class="dg-barra"><span style="width:{% widthratio qtd maior 100 %}%;background:{{ cor }};"></span></div></td>
+      <td class="text-end fw-semibold" style="width:10%;">{{ qtd }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  {% if linhas|length > 5 %}
+    <button type="button" class="btn btn-link btn-sm p-0" data-bs-toggle="modal" data-bs-target="{{ alvo }}">+ {{ linhas|length|add:"-5" }} cliente(s) — ver todos</button>
+  {% endif %}
+  {% endwith %}
+{% else %}
+  <div class="dg-sub py-3 text-center">{{ vazio }}</div>
+{% endif %}

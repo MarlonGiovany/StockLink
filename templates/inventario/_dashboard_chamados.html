@@ -1,0 +1,32 @@
+{% comment %}Tabela de chamados do SLA. Recebe: linhas, aberto (bool), vazio.{% endcomment %}
+{% if linhas %}
+  <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+    <thead><tr>
+      <th>OS</th><th>Cliente</th><th>Equipamento</th><th>Técnico</th><th>Abertura</th>
+      {% if not aberto %}<th>Encerramento</th>{% endif %}
+      <th class="text-end">{% if aberto %}Aberto há{% else %}Tempo{% endif %}</th><th>Situação</th>
+    </tr></thead>
+    <tbody>
+      {% for l in linhas %}
+      <tr>
+        <td><a href="{% url 'chamado_detalhe' l.chamado.pk %}">{{ l.numero }}</a></td>
+        <td>{{ l.cliente }}</td>
+        <td>{{ l.equipamento }}</td>
+        <td>{{ l.tecnico }}</td>
+        <td class="text-nowrap">{{ l.aberto_em|date:"d/m/Y H:i" }}</td>
+        {% if not aberto %}<td class="text-nowrap">{{ l.encerrado_em|date:"d/m/Y H:i" }}</td>{% endif %}
+        <td class="text-end text-nowrap">{{ l.tempo_texto }}</td>
+        <td>
+          {% if aberto %}
+            {% if l.no_prazo %}<span class="badge bg-info-subtle text-info-emphasis border fw-normal">aberto</span>
+            {% else %}<span class="badge bg-warning-subtle text-warning-emphasis border fw-normal">aberto, passou de {{ d.sla.prazo_horas }}h</span>{% endif %}
+          {% elif l.no_prazo %}<span class="badge bg-success-subtle text-success-emphasis border fw-normal">no prazo</span>
+          {% else %}<span class="badge bg-danger-subtle text-danger-emphasis border fw-normal">fora do prazo</span>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+{% else %}
+  <p class="text-secondary text-center py-3 mb-0">{{ vazio }}</p>
+{% endif %}

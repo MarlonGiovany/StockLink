@@ -48,6 +48,9 @@ urlpatterns = [
     path("contratos/<int:pk>/pdf/", views.contrato_pdf, name="contrato_pdf"),
     path("aditivo/<int:pk>/pdf/", views.aditivo_pdf, name="aditivo_pdf"),
 
+    path("dashboard/", views.dashboard, name="dashboard"),
+    path("dashboard/excel/", views.dashboard_excel, name="dashboard_excel"),
+
     path("permissoes/", views.permissoes_usuarios, name="permissoes_usuarios"),
     path("permissoes/<int:pk>/senha/", views.usuario_trocar_senha,
          name="usuario_trocar_senha"),

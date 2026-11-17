@@ -1,0 +1,161 @@
+{% comment %}Janelas de detalhamento do Dashboard Gerencial (abrem ao clicar nos cards).{% endcomment %}
+
+{# Faturamento e lucro: o que falta no sistema #}
+<div class="modal fade" id="m-financeiro" tabindex="-1" aria-labelledby="m-financeiro-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-financeiro-titulo">Faturamento e lucro operacional</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      <p>Esses dois indicadores não são calculados porque o StockLink ainda não guarda os dados necessários. O painel não usa estimativas.</p>
+      <table class="table table-sm">
+        <thead><tr><th>Dado</th><th>Situação</th></tr></thead>
+        <tbody>
+          <tr><td>Lançamentos de faturamento (notas, boletos, recebimentos)</td><td><span class="badge bg-danger-subtle text-danger-emphasis border">não existe</span></td></tr>
+          <tr><td>Despesas operacionais</td><td><span class="badge bg-danger-subtle text-danger-emphasis border">não existe</span></td></tr>
+          <tr><td>Gastos com peças e suprimentos</td><td><span class="badge bg-danger-subtle text-danger-emphasis border">não existe</span> <span class="small text-secondary">a OS guarda o nome da peça, sem preço</span></td></tr>
+          <tr><td>Custo das manutenções</td><td>
+            <span class="badge bg-success-subtle text-success-emphasis border">existe</span>
+            {% if d.custo_manutencao %}R$ {{ d.custo_manutencao|floatformat:2 }} registrados {{ d.no_periodo }}{% else %}nenhum custo registrado {{ d.no_periodo }}{% endif %}
+          </td></tr>
+          <tr><td>Receita recorrente (valor mensal dos contratos)</td><td><span class="badge bg-success-subtle text-success-emphasis border">existe</span> R$ {{ d.recorrente.valor|floatformat:2 }}/mês — é o valor contratado, não o faturado</td></tr>
+        </tbody>
+      </table>
+      <p class="small text-secondary mb-0">Próximo passo combinado: um cadastro de lançamentos mensais (receitas e despesas por categoria). Com ele, estes cards passam a mostrar os valores.</p>
+    </div>
+  </div></div>
+</div>
+
+{# Receita recorrente por cliente #}
+<div class="modal fade" id="m-recorrente" tabindex="-1" aria-labelledby="m-recorrente-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-recorrente-titulo">Receita recorrente em {{ d.referencia|date:"d/m/Y" }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      <p class="small text-secondary">Soma do valor mensal dos contratos ativos nessa data: o do último aditivo ou, sem aditivo, o valor do contrato. Máquinas sem cobrança à parte (franquia, contrato maior) não mudam a conta.</p>
+      {% if d.recorrente.por_cliente %}
+      <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+        <thead><tr><th>Cliente</th><th class="text-end">Contratos</th><th class="text-end">Valor mensal</th></tr></thead>
+        <tbody>
+          {% for l in d.recorrente.por_cliente %}
+          <tr>
+            <td>{{ l.cliente }}{% if l.sem_valor %} <span class="badge bg-warning-subtle text-warning-emphasis border fw-normal">{{ l.sem_valor }} sem valor</span>{% endif %}</td>
+            <td class="text-end">{{ l.contratos }}</td>
+            <td class="text-end">R$ {{ l.valor|floatformat:2 }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr class="fw-semibold"><td>Total</td><td class="text-end">{{ d.recorrente.contratos }}</td><td class="text-end">R$ {{ d.recorrente.valor|floatformat:2 }}</td></tr></tfoot>
+      </table></div>
+      {% else %}<p class="text-secondary text-center py-3 mb-0">Nenhum contrato ativo nessa data.</p>{% endif %}
+    </div>
+  </div></div>
+</div>
+
+{# Novas contratações: contratos novos e aditivos que aumentaram o valor #}
+<div class="modal fade" id="m-novos" tabindex="-1" aria-labelledby="m-novos-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-novos-titulo">Novas contratações — {{ d.rotulo }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      <p class="small text-secondary">Contrato novo entra pelo valor mensal dele. Aditivo entra pela diferença entre o novo valor mensal e o anterior, mesmo num contrato antigo.</p>
+      {% if d.novas.linhas %}
+      <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+        <thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th>Descrição</th><th class="text-end">De → para</th><th class="text-end">A mais por mês</th></tr></thead>
+        <tbody>
+          {% for l in d.novas.linhas %}
+          <tr>
+            <td>{{ l.data|date:"d/m/Y" }}</td>
+            <td>{% if l.tipo == "contrato" %}<span class="badge bg-success">Contrato novo</span>{% else %}<span class="badge bg-success-subtle text-success-emphasis border">Aditivo</span>{% endif %}</td>
+            <td><a href="{% url 'contrato_detalhe' l.contrato.pk %}">{{ l.cliente }}</a></td>
+            <td class="small">{{ l.descricao|truncatechars:90 }}</td>
+            <td class="text-end small text-nowrap">{% if l.tipo == "aditivo" %}R$ {{ l.anterior|floatformat:2 }} → R$ {{ l.novo|floatformat:2 }}{% else %}—{% endif %}</td>
+            <td class="text-end fw-semibold dg-verde text-nowrap">{% if l.valor is not None %}+ R$ {{ l.valor|floatformat:2 }}{% else %}<span class="text-secondary fw-normal">sem valor mensal</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr class="fw-semibold"><td colspan="5">Total</td><td class="text-end dg-verde">+ R$ {{ d.novas.valor|floatformat:2 }}</td></tr></tfoot>
+      </table></div>
+      {% else %}<p class="text-secondary text-center py-3 mb-0">Nenhuma contratação {{ d.no_periodo }}.</p>{% endif %}
+    </div>
+  </div></div>
+</div>
+
+{# Receita perdida: cancelamentos e reduções por aditivo #}
+<div class="modal fade" id="m-perdas" tabindex="-1" aria-labelledby="m-perdas-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-perdas-titulo">Receita perdida — {{ d.rotulo }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      <p class="small text-secondary">Cancelamento = o valor mensal que o contrato tinha na véspera. Redução = aditivo com valor mensal menor que o anterior. Maiores perdas primeiro.</p>
+      {% if d.perdas.linhas %}
+      <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+        <thead><tr><th>Data</th><th>Tipo</th><th>Cliente</th><th>Motivo / descrição</th><th class="text-end">A menos por mês</th></tr></thead>
+        <tbody>
+          {% for l in d.perdas.linhas %}
+          <tr>
+            <td>{{ l.data|date:"d/m/Y" }}</td>
+            <td>{% if l.tipo == "cancelamento" %}<span class="badge bg-danger">Cancelamento</span>{% else %}<span class="badge bg-danger-subtle text-danger-emphasis border">Redução por aditivo</span>{% endif %}</td>
+            <td><a href="{% url 'contrato_detalhe' l.contrato.pk %}">{{ l.cliente }}</a></td>
+            <td class="small">
+              {% if l.tipo == "cancelamento" %}{{ l.motivo|default:"—" }}{% else %}{{ l.descricao|truncatechars:90 }}<br><span class="text-secondary">R$ {{ l.anterior|floatformat:2 }} → R$ {{ l.novo|floatformat:2 }}</span>{% endif %}
+            </td>
+            <td class="text-end fw-semibold dg-vermelho text-nowrap">{% if l.valor is not None %}− R$ {{ l.valor|floatformat:2 }}{% else %}<span class="text-secondary fw-normal">sem valor mensal</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot><tr class="fw-semibold"><td colspan="4">Total</td><td class="text-end dg-vermelho">− R$ {{ d.perdas.valor|floatformat:2 }}</td></tr></tfoot>
+      </table></div>
+      {% if d.perdas.por_cliente|length > 1 %}
+      <h6 class="mt-3">Perda por cliente</h6>
+      <table class="table table-sm w-auto">
+        {% for nome, valor in d.perdas.por_cliente %}<tr><td>{{ nome }}</td><td class="text-end">R$ {{ valor|floatformat:2 }}</td></tr>{% endfor %}
+      </table>
+      {% endif %}
+      {% else %}<p class="text-secondary text-center py-3 mb-0">Nenhum cancelamento ou redução {{ d.no_periodo }}.</p>{% endif %}
+    </div>
+  </div></div>
+</div>
+
+{# Equipamentos instalados / retirados #}
+<div class="modal fade" id="m-instalados" tabindex="-1" aria-labelledby="m-instalados-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-instalados-titulo">Equipamentos instalados — {{ d.rotulo }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      {% include "inventario/_dashboard_maquinas.html" with linhas=d.movimentos.instalados ranking=d.movimentos.ranking_instalados titulo_data="Instalação" titulo_cliente="Cliente de destino" vazio="Nenhum equipamento instalado neste período." %}
+    </div>
+  </div></div>
+</div>
+<div class="modal fade" id="m-retirados" tabindex="-1" aria-labelledby="m-retirados-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-retirados-titulo">Equipamentos retirados — {{ d.rotulo }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      {% include "inventario/_dashboard_maquinas.html" with linhas=d.movimentos.retirados ranking=d.movimentos.ranking_retirados titulo_data="Retirada" titulo_cliente="Cliente de origem" com_motivo=True vazio="Nenhum equipamento retirado neste período." %}
+    </div>
+  </div></div>
+</div>
+
+{# Chamados: encerrados no período #}
+<div class="modal fade" id="m-sla" tabindex="-1" aria-labelledby="m-sla-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-sla-titulo">Chamados encerrados — {{ d.rotulo }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      <p class="small text-secondary">Tempo = da abertura ao encerramento, gravados pelo sistema. No prazo = até {{ d.sla.prazo_horas }}h. Chamados ainda abertos não entram na média.</p>
+      {% include "inventario/_dashboard_chamados.html" with linhas=d.sla.encerrados vazio="Nenhum chamado encerrado neste período." %}
+    </div>
+  </div></div>
+</div>
+
+{# Chamados: em aberto no fim do período #}
+<div class="modal fade" id="m-sla-abertos" tabindex="-1" aria-labelledby="m-sla-abertos-titulo" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content">
+    <div class="modal-header"><h5 class="modal-title" id="m-sla-abertos-titulo">Chamados em aberto em {{ d.referencia|date:"d/m/Y" }}</h5>
+      <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button></div>
+    <div class="modal-body">
+      <p class="small text-secondary">Tempo = há quanto tempo está aberto (no fim do período, ou agora se ele ainda não acabou). Mais antigos primeiro.</p>
+      {% include "inventario/_dashboard_chamados.html" with linhas=d.sla.em_aberto aberto=True vazio="Nenhum chamado em aberto." %}
+    </div>
+  </div></div>
+</div>

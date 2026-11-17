@@ -10,7 +10,7 @@ import json
 import os
 import re
 import tempfile
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal
 from unittest import mock
 
@@ -607,7 +607,7 @@ class NumeroDoAditivoConcorrenteTests(BaseLogada):
                 reverse("aditivo_novo", args=[self.contrato.pk]),
                 {
                     "tipo": Aditivo.Tipo.ADICAO, "descricao": "Nova cláusula",
-                    "valor": "", "data": "2026-09-01", "observacoes": "",
+                    "valor": "1000.00", "data": "2026-09-01", "observacoes": "",
                     "equipamentos": [],
                 },
             )
@@ -629,7 +629,7 @@ class NumeroDoAditivoConcorrenteTests(BaseLogada):
                 reverse("aditivo_novo", args=[self.contrato.pk]),
                 {
                     "tipo": Aditivo.Tipo.ADICAO, "descricao": "Nova cláusula",
-                    "valor": "", "data": "2026-09-01", "observacoes": "",
+                    "valor": "1000.00", "data": "2026-09-01", "observacoes": "",
                     "equipamentos": [],
                 },
             )
@@ -776,7 +776,7 @@ class LocacaoAtivaUnicaTests(BaseLogada):
         self.assertIn(Equipamento.objects.get(numero_patrimonio="1001"), oferecidas)
 
         resposta = self.client.post(url, {
-            "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "",
+            "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "1000.00",
             "data": "2026-09-01", "observacoes": "",
             "equipamentos": [self.maquina.pk],
             f"valor_equip_{self.maquina.pk}": "100",
@@ -1371,7 +1371,7 @@ class ValorDoAditivoPorMaquinaTests(BaseLogada):
         return self.client.post(
             reverse("aditivo_novo", args=[self.contrato.pk]),
             {
-                "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "",
+                "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "1000.00",
                 "data": "2026-09-01", "observacoes": "",
                 "equipamentos": [self.maquina.pk],
                 f"valor_equip_{self.maquina.pk}": valor,
@@ -1766,11 +1766,12 @@ class EdicaoDeAditivoTests(BaseLogada):
         self.assertEqual(str(self.manual.data), "2026-09-15")
         self.assertEqual(self.manual.numero, 1)
 
-    def test_com_maquinas_tipo_e_valor_ficam_travados(self):
+    def test_com_maquinas_so_o_tipo_fica_travado(self):
+        # O valor é o novo valor mensal do contrato: pode ser corrigido.
         self.edita(self.com_maquina, tipo=Aditivo.Tipo.REMOCAO, valor="999")
         self.com_maquina.refresh_from_db()
         self.assertEqual(self.com_maquina.tipo, Aditivo.Tipo.ADICAO)
-        self.assertEqual(self.com_maquina.valor, Decimal("250"))
+        self.assertEqual(self.com_maquina.valor, Decimal("999"))
         self.assertEqual(self.com_maquina.observacoes, "corrigido")
         self.locacao.refresh_from_db()
         self.assertTrue(self.locacao.ativa)
@@ -3510,3 +3511,306 @@ class CancelamentoContratoTests(BaseLogada):
         self.assertEqual(self.contrato.motivo_cancelamento, "")
         self.assertIsNone(self.contrato.cancelado_por)
         self.assertFalse(self.contrato.locacoes.filter(ativa=True).exists())
+
+
+
+class ValorMensalDoContratoTests(BaseLogada):
+    """Cada aditivo guarda o novo valor mensal do contrato a partir da sua data."""
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="CIRURGIA")
+        self.contrato = Contrato.objects.create(
+            cliente=self.cliente, data_contrato=date(2026, 1, 10), valor=Decimal("20000"),
+        )
+
+    def aditivo(self, numero, dia, valor):
+        return Aditivo.objects.create(
+            contrato=self.contrato, numero=numero, descricao="x", data=dia,
+            valor=None if valor is None else Decimal(valor),
+        )
+
+    def test_valor_segue_o_ultimo_aditivo_ate_a_data(self):
+        self.aditivo(1, date(2026, 5, 1), "20500")
+        self.aditivo(2, date(2026, 8, 1), "19000")
+        self.aditivo(3, date(2026, 9, 1), None)  # aditivo antigo, sem valor: ignorado
+        self.assertEqual(self.contrato.valor_mensal_em(date(2026, 4, 30)), Decimal("20000"))
+        self.assertEqual(self.contrato.valor_mensal_em(date(2026, 5, 1)), Decimal("20500"))
+        self.assertEqual(self.contrato.valor_mensal_em(date(2026, 9, 15)), Decimal("19000"))
+
+    def test_formulario_abre_com_o_valor_atual_e_exige_valor(self):
+        self.aditivo(1, date(2026, 5, 1), "20500")
+        tela = self.client.get(reverse("aditivo_novo", args=[self.contrato.pk]))
+        self.assertEqual(tela.context["form"].initial["valor"], Decimal("20500"))
+
+        resposta = self.client.post(reverse("aditivo_novo", args=[self.contrato.pk]), {
+            "tipo": Aditivo.Tipo.REMOCAO, "descricao": "1 monitor devolvido", "valor": "",
+            "data": "2026-10-01", "observacoes": "",
+        })
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Informe o novo valor mensal do contrato")
+
+    def test_aditivo_com_maquinas_grava_o_valor_digitado_e_nao_a_soma(self):
+        maquina = Equipamento.objects.get(numero_patrimonio="1001")
+        self.client.post(reverse("aditivo_novo", args=[self.contrato.pk]), {
+            "tipo": Aditivo.Tipo.ADICAO, "descricao": "", "valor": "20500.00",
+            "data": "2026-10-01", "observacoes": "",
+            "equipamentos": [maquina.pk], f"valor_equip_{maquina.pk}": "350",
+        })
+        aditivo = self.contrato.aditivos.get()
+        self.assertEqual(aditivo.valor, Decimal("20500"))
+        self.assertEqual(Locacao.objects.get(equipamento=maquina).valor, Decimal("350"))
+
+
+class DashboardGerencialTests(BaseLogada):
+    """Os números do Dashboard Gerencial saem das datas reais de cada evento."""
+
+    def setUp(self):
+        super().setUp()
+        from . import dashboard
+        self.painel = dashboard
+        self.hoje = date(2026, 11, 20)
+        self.cliente_a = Cliente.objects.create(nome="HOSPITAL A")
+        self.cliente_b = Cliente.objects.create(nome="CLINICA B")
+        self.m1, self.m2, self.m3 = [
+            Equipamento.objects.get(numero_patrimonio=n) for n in ("1001", "1002", "1003")
+        ]
+
+    def contrato(self, cliente, inicio, valor):
+        return Contrato.objects.create(
+            cliente=cliente, data_contrato=inicio,
+            valor=None if valor is None else Decimal(valor),
+        )
+
+    def aditivo(self, contrato, numero, dia, valor, tipo=Aditivo.Tipo.ADICAO):
+        return Aditivo.objects.create(
+            contrato=contrato, numero=numero, descricao=f"Aditivo de teste {numero}",
+            data=dia, valor=Decimal(valor), tipo=tipo,
+        )
+
+    def loca(self, maquina, cliente, inicio, valor="100", fim=None, contrato=None):
+        return Locacao.objects.create(
+            equipamento=maquina, cliente=cliente, contrato=contrato, valor=Decimal(valor),
+            data_inicio=inicio, data_fim=fim, ativa=fim is None,
+        )
+
+    def montar(self, ano=2026, mes=10, cliente=None, ate=None):
+        return self.painel.montar((ano, mes), ate, cliente, hoje=self.hoje)
+
+    # ----- Período de vários meses -----
+
+    def test_periodo_soma_os_eventos_e_tira_a_foto_no_fim(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20000")
+        self.aditivo(c, 1, date(2026, 6, 10), "20500")   # +500 em junho
+        self.aditivo(c, 2, date(2026, 9, 10), "21000")   # +500 em setembro
+        self.contrato(self.cliente_b, date(2026, 8, 1), "1000")  # novo em agosto
+        self.loca(self.m1, self.cliente_a, date(2026, 6, 2), contrato=c)
+        self.loca(self.m2, self.cliente_a, date(2026, 9, 2), contrato=c)
+
+        d = self.montar(ano=2026, mes=6, ate=(2026, 9))
+        self.assertEqual(d["qtd_meses"], 4)
+        self.assertEqual(d["rotulo"], "Junho a Setembro de 2026")
+        self.assertEqual(d["novas"]["quantidade"], 3)
+        self.assertEqual(d["novas"]["valor"], Decimal("2000"))
+        self.assertEqual(len(d["movimentos"]["instalados"]), 2)
+        # Foto do fim (30/09) comparada com a véspera do início (31/05)
+        self.assertEqual(d["recorrente"]["valor"], Decimal("22000"))
+        self.assertEqual(d["recorrente_anterior"]["valor"], Decimal("20000"))
+        self.assertAlmostEqual(d["recorrente_variacao"], 10.0)
+        # Os gráficos mostram exatamente os meses do período
+        self.assertEqual([m["rotulo"] for m in d["serie"]], ["Jun/26", "Jul/26", "Ago/26", "Set/26"])
+
+    def test_um_mes_so_mostra_os_12_meses_no_grafico(self):
+        self.assertEqual(len(self.montar(mes=10)["serie"]), 12)
+
+    def test_periodo_de_janeiro_a_dezembro_mostra_os_12_meses(self):
+        d = self.painel.montar((2025, 1), (2025, 12), hoje=self.hoje)
+        self.assertEqual(d["qtd_meses"], 12)
+        self.assertEqual(len(d["serie"]), 12)
+        self.assertEqual(d["rotulo"], "Janeiro a Dezembro de 2025")
+
+    def test_periodo_valido_arruma_o_que_foi_pedido(self):
+        valido = self.painel.periodo_valido
+        self.assertEqual(valido((2026, 9), (2026, 6), self.hoje)[:2], ((2026, 6), (2026, 9)))
+        de, ate, aviso = valido((2024, 1), (2026, 11), self.hoje)
+        self.assertEqual((de, ate), ((2025, 12), (2026, 11)))
+        self.assertIn("12 meses", aviso)
+        de, ate, aviso = valido((2026, 10), (2027, 3), self.hoje)
+        self.assertEqual((de, ate), ((2026, 10), (2026, 11)))
+        self.assertIn("mês atual", aviso)
+
+    def test_tela_aceita_periodo_e_o_link_antigo_de_um_mes(self):
+        resposta = self.client.get(reverse("dashboard") + "?de=2026-01&ate=2026-06")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertEqual(resposta.context["d"]["qtd_meses"], 6)
+        resposta = self.client.get(reverse("dashboard") + "?mes=2026-03")
+        self.assertEqual(resposta.context["d"]["qtd_meses"], 1)
+        self.assertEqual(resposta.context["d"]["de"], (2026, 3))
+        resposta = self.client.get(reverse("dashboard_excel") + "?de=2026-01&ate=2026-06")
+        self.assertIn("dashboard-2026-01-a-2026-06", resposta["Content-Disposition"])
+
+    # ----- Receita -----
+
+    def test_receita_recorrente_vem_do_valor_do_contrato_e_nao_das_maquinas(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20000")
+        # Máquinas com valor cadastrado, mas dentro do contrato (franquia etc.)
+        self.loca(self.m1, self.cliente_a, date(2026, 1, 1), valor="900", contrato=c)
+        self.loca(self.m2, self.cliente_a, date(2026, 1, 1), valor="0", contrato=c)
+        d = self.montar()
+        self.assertEqual(d["recorrente"]["valor"], Decimal("20000"))
+        self.assertEqual(d["contratos_ativos"], 1)
+
+    def test_aditivo_muda_a_receita_a_partir_da_sua_data(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20000")
+        self.aditivo(c, 56, date(2026, 10, 15), "20500")
+        self.assertEqual(self.montar(mes=9)["recorrente"]["valor"], Decimal("20000"))
+        outubro = self.montar(mes=10)
+        self.assertEqual(outubro["recorrente"]["valor"], Decimal("20500"))
+        self.assertAlmostEqual(outubro["recorrente_variacao"], 2.5)
+
+    def test_aditivo_com_aumento_conta_como_nova_contratacao(self):
+        # O exemplo do Cirurgia: R$ 20.000,00 → Aditivo 56 com R$ 20.500,00
+        c = self.contrato(self.cliente_a, date(2025, 3, 1), "20000")
+        self.aditivo(c, 56, date(2026, 10, 15), "20500")
+        novas = self.montar()["novas"]
+        self.assertEqual(novas["quantidade"], 1)
+        self.assertEqual(novas["aditivos"], 1)
+        self.assertEqual(novas["contratos"], 0)
+        self.assertEqual(novas["valor"], Decimal("500"))
+        self.assertEqual(novas["linhas"][0]["anterior"], Decimal("20000"))
+
+    def test_contrato_novo_conta_pelo_valor_mensal(self):
+        self.contrato(self.cliente_b, date(2026, 10, 3), "1200")
+        self.contrato(self.cliente_b, date(2026, 10, 9), None)
+        d = self.montar()
+        self.assertEqual(d["novas"]["contratos"], 2)
+        self.assertEqual(d["novas"]["valor"], Decimal("1200"))
+        self.assertEqual(d["novas"]["sem_valor"], 1)
+        self.assertTrue(any("sem valor mensal" in a for a in d["avisos"]))
+
+    def test_remocao_sem_mudar_valor_nao_e_perda(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20000")
+        self.aditivo(c, 1, date(2026, 10, 5), "20000", tipo=Aditivo.Tipo.REMOCAO)
+        d = self.montar()
+        self.assertEqual(d["perdas"]["linhas"], [])
+        self.assertEqual(d["novas"]["linhas"], [])
+
+    def test_aditivo_que_reduz_entra_na_receita_perdida(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20500")
+        self.aditivo(c, 1, date(2026, 10, 5), "19000", tipo=Aditivo.Tipo.REMOCAO)
+        perdas = self.montar()["perdas"]
+        self.assertEqual(perdas["valor"], Decimal("1500"))
+        self.assertEqual(perdas["reducoes"], 1)
+        self.assertEqual(perdas["cancelamentos"], 0)
+
+    def test_cancelamento_perde_o_valor_mensal_da_vespera(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20000")
+        self.aditivo(c, 1, date(2026, 6, 1), "20500")
+        self.loca(self.m1, self.cliente_a, date(2026, 1, 1), contrato=c)
+        self.loca(self.m2, self.cliente_a, date(2026, 1, 1), contrato=c)
+        self.client.post(reverse("contrato_cancelar", args=[c.pk]), {
+            "data_cancelamento": "2026-11-10", "motivo": "Fechou a unidade.",
+        })
+        d = self.montar(mes=11)
+        self.assertEqual(d["perdas"]["cancelamentos"], 1)
+        self.assertEqual(d["perdas"]["valor"], Decimal("20500"))
+        self.assertEqual(d["perdas"]["por_cliente"], [("HOSPITAL A", Decimal("20500"))])
+        self.assertEqual(d["recorrente"]["valor"], Decimal("0"))
+        self.assertEqual(d["contratos_ativos"], 0)
+        # As máquinas devolvidas aparecem como retiradas, com o motivo
+        self.assertEqual(len(d["movimentos"]["retirados"]), 2)
+        self.assertIn("Fechou a unidade.", d["movimentos"]["retirados"][0]["motivo"])
+
+    def test_contrato_sem_valor_e_maquina_sem_contrato_viram_aviso(self):
+        self.contrato(self.cliente_a, date(2026, 1, 1), None)
+        self.loca(self.m1, self.cliente_b, date(2026, 10, 5), valor="0")
+        d = self.montar()
+        self.assertEqual(len(d["recorrente"]["sem_valor"]), 1)
+        self.assertEqual(d["movimentos"]["instalados_suspeitos"], 1)
+        self.assertTrue(any("sem valor mensal" in a for a in d["avisos"]))
+        self.assertTrue(any("sem contrato vinculado" in a for a in d["avisos"]))
+
+    def test_filtro_por_cliente(self):
+        self.contrato(self.cliente_a, date(2026, 1, 1), "300")
+        self.contrato(self.cliente_b, date(2026, 1, 1), "200")
+        self.loca(self.m1, self.cliente_a, date(2026, 10, 2))
+        self.loca(self.m2, self.cliente_b, date(2026, 10, 2))
+        d = self.montar(cliente=self.cliente_b)
+        self.assertEqual(d["recorrente"]["valor"], Decimal("200"))
+        self.assertEqual(len(d["movimentos"]["instalados"]), 1)
+
+    # ----- Máquinas -----
+
+    def test_mesma_maquina_que_vai_e_volta_conta_cada_evento(self):
+        # Outubro: m1 vai para A, volta, e vai para B — 2 instalações, 1 retirada
+        self.loca(self.m1, self.cliente_a, date(2026, 10, 2), fim=date(2026, 10, 10))
+        self.loca(self.m1, self.cliente_b, date(2026, 10, 15))
+        d = self.montar()
+        self.assertEqual(len(d["movimentos"]["instalados"]), 2)
+        self.assertEqual(len(d["movimentos"]["retirados"]), 1)
+        self.assertEqual(d["movimentos"]["retirados"][0]["cliente"], "HOSPITAL A")
+        self.assertEqual(
+            d["movimentos"]["ranking_instalados"], [("CLINICA B", 1), ("HOSPITAL A", 1)]
+        )
+
+    # ----- SLA -----
+
+    def test_sla_conta_so_os_encerrados_no_mes(self):
+        fuso = timezone.get_current_timezone()
+
+        def chamado(aberto, encerrado=None):
+            ch = Chamado.objects.create(equipamento=self.m1, cliente=self.cliente_a, descricao="x")
+            dados = {"aberto_em": aberto}
+            if encerrado:
+                dados.update(encerrado_em=encerrado, status=Chamado.Status.ENCERRADO)
+            Chamado.objects.filter(pk=ch.pk).update(**dados)
+
+        chamado(datetime(2026, 10, 1, 8, tzinfo=fuso), datetime(2026, 10, 1, 12, tzinfo=fuso))   # 4h
+        chamado(datetime(2026, 10, 2, 8, tzinfo=fuso), datetime(2026, 10, 4, 8, tzinfo=fuso))    # 48h
+        chamado(datetime(2026, 10, 30, 8, tzinfo=fuso))                                          # aberto
+        chamado(datetime(2026, 10, 31, 8, tzinfo=fuso), datetime(2026, 11, 2, 8, tzinfo=fuso))   # fechou em nov.
+
+        sla = self.montar()["sla"]
+        self.assertEqual(sla["qtd_encerrados"], 2)
+        self.assertEqual(sla["media"], timedelta(hours=26))
+        self.assertEqual(sla["no_prazo"], 1)
+        self.assertEqual(sla["percentual"], 50.0)
+        # Em aberto no fim de outubro: o que segue aberto e o que só fechou em novembro
+        self.assertEqual(sla["qtd_em_aberto"], 2)
+
+    def test_sem_dados_nao_inventa_numero(self):
+        d = self.montar()
+        self.assertEqual(d["recorrente"]["valor"], Decimal("0"))
+        self.assertIsNone(d["recorrente_variacao"])
+        self.assertIsNone(d["sla"]["media"])
+        self.assertIsNone(d["sla"]["percentual"])
+        self.assertEqual(d["avisos"], [])
+
+    # ----- Tela, Excel e acesso -----
+
+    def test_tela_e_excel_abrem(self):
+        c = self.contrato(self.cliente_a, date(2026, 1, 1), "20000")
+        self.aditivo(c, 56, date(2026, 10, 15), "20500")
+        self.aditivo(c, 57, date(2026, 10, 20), "20000", tipo=Aditivo.Tipo.REMOCAO)
+        self.loca(self.m1, self.cliente_a, date(2026, 10, 2), contrato=c)
+        resposta = self.client.get(reverse("dashboard") + "?mes=2026-10")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Dashboard Gerencial")
+        self.assertContains(resposta, "Indisponível")
+        self.assertContains(resposta, "Redução por aditivo")
+        resposta = self.client.get(reverse("dashboard_excel") + "?mes=2026-10")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertIn("spreadsheetml", resposta["Content-Type"])
+
+    def test_mes_invalido_cai_no_mes_atual(self):
+        resposta = self.client.get(reverse("dashboard") + "?mes=banana")
+        self.assertEqual(resposta.status_code, 200)
+
+    def test_sem_permissao_nao_entra(self):
+        from django.contrib.auth.models import Permission
+        comum = get_user_model().objects.create_user("comum", password="x")
+        self.client.force_login(comum)
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 403)
+        self.assertEqual(self.client.get(reverse("dashboard_excel")).status_code, 403)
+        comum.user_permissions.add(Permission.objects.get(codename="ver_dashboard"))
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)

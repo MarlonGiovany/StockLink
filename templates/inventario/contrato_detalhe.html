@@ -38,9 +38,11 @@
       <table class="table table-sm mb-0">
         <tr><th>Cliente</th><td>{{ contrato.cliente|default:"—" }}</td></tr>
         <tr><th>Data</th><td>{{ contrato.data_contrato|date:"d/m/Y" }}</td></tr>
-        <tr><th>Valor do contrato</th>
-            <td><strong>{% if contrato.valor %}R$ {{ contrato.valor|floatformat:2 }}{% else %}—{% endif %}</strong>
-            {% if perms.inventario.change_contrato %}
+        <tr><th>Valor mensal atual</th>
+            <td><strong>{% if contrato.valor_mensal_atual is not None %}R$ {{ contrato.valor_mensal_atual|floatformat:2 }}{% else %}—{% endif %}</strong>
+            {% if aditivos and contrato.valor_mensal_atual != contrato.valor %}
+              <span class="text-muted small ms-2">pelo último aditivo · valor original R$ {{ contrato.valor|default_if_none:0|floatformat:2 }}</span>
+            {% elif perms.inventario.change_contrato %}
               <a href="{% url 'contrato_editar' contrato.pk %}" class="small ms-2">alterar</a>
             {% endif %}</td></tr>
         <tr><th>Valor total cobrado de máquinas no contrato</th>
@@ -172,14 +174,14 @@
         <a href="{% url 'aditivo_novo' contrato.pk %}" class="btn btn-sm text-white" style="background:#16A34A;">+ Novo aditivo</a>
       {% endif %}
     </div>
-    <p class="text-muted small mb-2">Registro das alterações deste contrato. Não altera o valor do contrato (que é definido manualmente acima).</p>
+    <p class="text-muted small mb-2">Registro das alterações deste contrato. Cada aditivo guarda o novo valor mensal do contrato a partir da sua data.</p>
     {% if aditivos %}
       <div class="table-responsive">
         <table class="table table-sm align-middle mb-0">
           <thead class="table-light">
             <tr>
               <th>Nº</th><th>Operação</th><th>Equipamento / descrição</th>
-              <th class="text-end">Valor do(s) equip.</th>
+              <th class="text-end">Novo valor mensal</th>
               <th>Data</th><th>PDF</th><th></th>
             </tr>
           </thead>

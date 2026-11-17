@@ -8,7 +8,7 @@ Perfis
 
   - abre a tela "Usuários e permissões";
   - escolhe o perfil de cada pessoa (Técnico, Recepção, Superusuário);
-  - libera as áreas restritas (aba Contratos e PDFs);
+  - libera as áreas restritas (aba Contratos, PDFs e Dashboard Gerencial);
   - cria e edita usuários e grupos no ``/admin/``.
 
 * **Superusuário** — só quem o Analista escolher. Faz tudo nas telas, mas
@@ -26,7 +26,8 @@ superusuários para trabalhar.
 
 * ``ver_contratos`` — a aba **Contratos** inteira;
 * ``ver_pdfs``      — os PDFs anexados (contrato, aditivo e o PDF que aparece
-  na ficha da máquina).
+  na ficha da máquina);
+* ``ver_dashboard`` — o **Dashboard Gerencial** (receita, contratos e SLA).
 
 Por que não usar o ``user.has_perm()`` direto nas áreas? Porque o Django
 devolve ``True`` para qualquer superusuário, e ser superusuário não libera
@@ -43,6 +44,7 @@ from django.db.models import Q
 # Permissões declaradas em Contrato.Meta.permissions
 VER_CONTRATOS = "ver_contratos"
 VER_PDFS = "ver_pdfs"
+VER_DASHBOARD = "ver_dashboard"
 
 # Grupos dos perfis que não são superusuário (criados na migração 0018)
 GRUPO_TECNICO = "Técnico"
@@ -65,6 +67,8 @@ AREAS = [
      "Ver a aba Contratos, a lista e a ficha de cada contrato."),
     (VER_PDFS, "PDFs anexados",
      "Abrir os PDFs do contrato, dos aditivos e o PDF que aparece na ficha da máquina."),
+    (VER_DASHBOARD, "Dashboard Gerencial",
+     "Ver o painel mensal com receita, contratos, movimentação de máquinas e SLA."),
 ]
 
 
@@ -112,7 +116,7 @@ def aplica_perfil(usuario, perfil):
     Também limpa as permissões marcadas direto na conta — senão elas
     continuariam valendo por cima do perfil (um técnico com "add_cliente"
     direto seguiria cadastrando cliente). Ficam só as áreas restritas
-    (Contratos e PDFs), que o Analista libera pessoa por pessoa.
+    (Contratos, PDFs e Dashboard), que o Analista libera pessoa por pessoa.
     """
     extras = diretas_fora_das_areas(usuario)
     if extras:
@@ -133,11 +137,12 @@ def aplica_perfil(usuario, perfil):
 
 
 def diretas_fora_das_areas(usuario):
-    """Permissões marcadas direto na conta que não são Contratos/PDFs."""
+    """Permissões marcadas direto na conta que não são das áreas restritas."""
+    codigos = {codigo for codigo, _, _ in AREAS}
     return [
         p for p in usuario.user_permissions.all()
         if not (p.content_type.app_label == "inventario"
-                and p.codename in (VER_CONTRATOS, VER_PDFS))
+                and p.codename in codigos)
     ]
 
 
@@ -160,6 +165,10 @@ def pode_ver_contratos(user):
 
 def pode_ver_pdfs(user):
     return tem_area(user, VER_PDFS)
+
+
+def pode_ver_dashboard(user):
+    return tem_area(user, VER_DASHBOARD)
 
 
 def exige_area(codename):

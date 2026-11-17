@@ -19,6 +19,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 
+from . import dashboard as painel_gerencial
 from . import planilhas
 
 from .forms import (
@@ -54,6 +55,7 @@ from .permissoes import (
     AREAS,
     PERFIS,
     VER_CONTRATOS,
+    VER_DASHBOARD,
     VER_PDFS,
     aplica_perfil,
     exige_analista,
@@ -1234,9 +1236,6 @@ def aditivo_novo(request, pk):
                                 aditivo.descricao = (
                                     f"{len(equipamentos)} máquina(s) incluída(s): {nomes}"
                                 )
-                            # Soma o valor real de cada máquina — elas podem
-                            # ter preços diferentes entre si.
-                            aditivo.valor = sum(valores.values())
 
                         # O número do aditivo é o próximo livre do contrato. Duas
                         # pessoas salvando ao mesmo tempo podem calcular o mesmo
@@ -1300,7 +1299,9 @@ def aditivo_novo(request, pk):
                             messages.success(request, f"Aditivo {proximo} registrado.")
                             return redirect("contrato_detalhe", pk=contrato.pk)
     else:
-        form = AditivoForm()
+        # Abre com o valor atual: numa alteração que não muda o valor,
+        # basta confirmar.
+        form = AditivoForm(initial={"valor": contrato.valor_mensal_atual})
     return render(
         request, "inventario/aditivo_form.html",
         {"form": form, "contrato": contrato},
@@ -2155,3 +2156,96 @@ def planilha_equipamentos(request):
         com_contrato=pode_ver_contratos(request.user),
     )
     return _entrega_planilha(livro, f"equipamentos-{slugify(rotulos[status])}")
+
+
+# ----- Dashboard Gerencial -----
+
+def _le_mes(texto):
+    """'2026-11' -> (2026, 11); None se não for um mês válido."""
+    try:
+        ano, mes = (int(parte) for parte in texto.split("-"))
+    except ValueError:
+        return None
+    if 1 <= mes <= 12 and 2000 <= ano <= 2100:
+        return ano, mes
+    return None
+
+
+def _filtros_dashboard(request):
+    """Período (?de=2026-06&ate=2026-11; padrão: o mês atual) e cliente.
+
+    `?mes=2026-11` (um mês só) continua valendo para links antigos.
+    """
+    hoje = timezone.localdate()
+    atual = (hoje.year, hoje.month)
+    unico = _le_mes(request.GET.get("mes", ""))
+    de = _le_mes(request.GET.get("de", "")) or unico
+    ate = _le_mes(request.GET.get("ate", "")) or unico or de or atual
+    de = de or ate
+    de, ate, aviso = painel_gerencial.periodo_valido(de, ate, hoje)
+    cliente = None
+    if request.GET.get("cliente", "").isdigit():
+        cliente = Cliente.objects.filter(pk=request.GET["cliente"]).first()
+    return de, ate, cliente, aviso
+
+
+def _mes_texto(ano_mes):
+    return f"{ano_mes[0]:04d}-{ano_mes[1]:02d}"
+
+
+def _desloca(ano_mes, meses):
+    total = ano_mes[0] * 12 + (ano_mes[1] - 1) + meses
+    return total // 12, total % 12 + 1
+
+
+@login_required
+@exige_area(VER_DASHBOARD)
+def dashboard(request):
+    de, ate, cliente, aviso = _filtros_dashboard(request)
+    dados = painel_gerencial.montar(de, ate, cliente)
+    hoje = timezone.localdate()
+    atual = (hoje.year, hoje.month)
+    tamanho = dados["qtd_meses"]
+
+    def link(novo_de, novo_ate):
+        partes = [f"de={_mes_texto(novo_de)}", f"ate={_mes_texto(novo_ate)}"]
+        if cliente:
+            partes.append(f"cliente={cliente.pk}")
+        return "?" + "&".join(partes)
+
+    # ‹ › andam o período inteiro para trás/frente, mantendo o tamanho
+    seguinte_ate = _desloca(ate, tamanho)
+    contexto = {
+        "d": dados,
+        "cliente": cliente,
+        "clientes": Cliente.objects.order_by("nome"),
+        "de_valor": _mes_texto(de),
+        "ate_valor": _mes_texto(ate),
+        "mes_atual_valor": _mes_texto(atual),
+        "link_anterior": link(_desloca(de, -tamanho), _desloca(ate, -tamanho)),
+        "link_seguinte": (
+            link(_desloca(de, tamanho), seguinte_ate) if seguinte_ate <= atual else ""
+        ),
+        # Atalhos: os últimos N meses, terminando no mês atual
+        "atalhos": [
+            (rotulo, link(_desloca(atual, 1 - n), atual), tamanho == n and ate == atual)
+            for rotulo, n in (("Este mês", 1), ("3 meses", 3), ("6 meses", 6), ("12 meses", 12))
+        ],
+        "aviso_periodo": aviso,
+        "atualizado_em": timezone.localtime(),
+        "query": request.GET.urlencode(),
+    }
+    return render(request, "inventario/dashboard.html", contexto)
+
+
+@login_required
+@exige_area(VER_DASHBOARD)
+def dashboard_excel(request):
+    de, ate, cliente, _aviso = _filtros_dashboard(request)
+    dados = painel_gerencial.montar(de, ate, cliente)
+    nome = f"dashboard-{_mes_texto(de)}"
+    if de != ate:
+        nome += f"-a-{_mes_texto(ate)}"
+    if cliente:
+        nome += "-" + slugify(cliente.nome)
+    return _entrega_planilha(planilhas.dashboard_mensal(dados, cliente), nome)

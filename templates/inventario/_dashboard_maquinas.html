@@ -1,0 +1,31 @@
+{% comment %}Tabela de máquinas instaladas/retiradas. Recebe: linhas, ranking, titulo_data, titulo_cliente, com_motivo, vazio.{% endcomment %}
+{% if linhas %}
+  <p class="small text-secondary">O <strong>valor de referência</strong> é o que está na ficha de cada máquina. Ele <strong>não entra na receita</strong>, que sai só do valor mensal dos contratos; muitas máquinas não são cobradas à parte (franquia, contrato maior).</p>
+  <div class="mb-3 d-flex flex-wrap gap-2">
+    {% for nome, qtd in ranking %}
+      <span class="badge bg-body-secondary text-body border fw-normal fs-6">{{ nome }} <strong>{{ qtd }}</strong></span>
+    {% endfor %}
+  </div>
+  <div class="table-responsive"><table class="table table-sm table-hover align-middle">
+    <thead><tr>
+      <th>{{ titulo_data }}</th><th>INF</th><th>Equipamento</th><th>Marca / modelo</th><th>{{ titulo_cliente }}</th>
+      <th class="text-end">Valor de referência da máquina</th>{% if com_motivo %}<th>Motivo</th>{% endif %}
+    </tr></thead>
+    <tbody>
+      {% for l in linhas %}
+      <tr>
+        <td>{{ l.data|date:"d/m/Y" }}</td>
+        <td class="text-nowrap"><a href="{% url 'equipamento_detalhe' l.equipamento_id %}">{{ l.inf }}</a></td>
+        <td>{{ l.equipamento }}</td>
+        <td>{{ l.marca_modelo }}</td>
+        <td>{{ l.cliente }}</td>
+        <td class="text-end">{% if l.valor %}R$ {{ l.valor|floatformat:2 }}{% else %}<span class="text-secondary">R$ 0,00</span>{% endif %}</td>
+        {% if com_motivo %}<td class="small">{{ l.motivo|default:'<span class="text-secondary">não registrado</span>' }}</td>{% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot><tr class="fw-semibold"><td colspan="{% if com_motivo %}7{% else %}6{% endif %}">Total: {{ linhas|length }} equipamento{{ linhas|length|pluralize }}</td></tr></tfoot>
+  </table></div>
+{% else %}
+  <p class="text-secondary text-center py-3 mb-0">{{ vazio }}</p>
+{% endif %}

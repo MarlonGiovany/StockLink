@@ -514,17 +514,22 @@ class ContratoForm(BootstrapFormMixin, forms.ModelForm):
         return _valida_tamanho(arquivo)
 
 
+def exige_novo_valor(form):
+    form.fields["valor"].required = True
+    form.fields["valor"].error_messages["required"] = (
+        "Informe o novo valor mensal do contrato. Se não mudou, repita o valor atual."
+    )
+
+
 class AditivoForm(BootstrapFormMixin, forms.ModelForm):
     """Registra o aditivo e, quando for Adição, já inclui as máquinas marcadas.
 
-    `descricao` e `valor` continuam existindo para o registro manual de
-    sempre (principalmente Remoção, que não passa por seleção de máquinas).
-    Quando `equipamentos` vem marcado, os dois são preenchidos sozinhos: a
-    descrição lista as máquinas, e o valor vira a **soma do valor real de
-    cada uma** — cada máquina tem seu próprio campo de valor no template
-    (`valor_equip_<id>`, lido direto do POST na view, não é campo deste
-    form) porque o preço pode variar de máquina pra máquina dentro do
-    mesmo aditivo; não faz sentido forçar todas ao mesmo valor.
+    `valor` é o **novo valor mensal do contrato** e é obrigatório (a view
+    já abre com o valor atual preenchido). `descricao` sai sozinha quando
+    há máquinas marcadas. Cada máquina marcada tem seu próprio campo de
+    valor no template (`valor_equip_<id>`, lido direto do POST na view, não
+    é campo deste form): é o valor da locação daquela máquina, guardado na
+    ficha dela, e não mexe no valor do contrato.
     """
 
     equipamentos = forms.ModelMultipleChoiceField(
@@ -557,9 +562,9 @@ class AditivoForm(BootstrapFormMixin, forms.ModelForm):
         # O mixin bootstrap marca todo campo fora de select/checkbox único como
         # "form-control"; aqui é uma lista de checkboxes, então corrige a classe.
         self.fields["equipamentos"].widget.attrs["class"] = "form-check-input"
-        # Preenchidos automaticamente quando há máquinas marcadas (ver clean()).
+        # Preenchida automaticamente quando há máquinas marcadas (ver clean()).
         self.fields["descricao"].required = False
-        self.fields["valor"].required = False
+        exige_novo_valor(self)
 
     def clean_arquivo(self):
         arquivo = self.cleaned_data.get("arquivo")
@@ -587,10 +592,9 @@ class AditivoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
     e do status de cada equipamento. O número também não muda, para não
     furar a sequência do contrato.
 
-    Quando o aditivo incluiu máquinas, o tipo (Adição) e o valor (soma das
-    máquinas) ficam travados: mudar só aqui deixaria o registro dizendo uma
-    coisa e as locações outra. O valor de cada máquina se ajusta na ficha do
-    contrato, em "valor em lote".
+    Quando o aditivo incluiu máquinas, o tipo (Adição) fica travado: mudar
+    só aqui deixaria o registro dizendo uma coisa e as locações outra. O
+    novo valor mensal do contrato pode ser corrigido normalmente.
     """
 
     class Meta:
@@ -605,13 +609,9 @@ class AditivoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         protege_arquivo(self, "arquivo", "aditivo_pdf")
+        exige_novo_valor(self)
         if self.instance.pk and self.instance.locacoes.exists():
-            for campo in ("tipo", "valor"):
-                self.fields[campo].disabled = True
-            self.fields["valor"].help_text = (
-                "Soma do valor das máquinas deste aditivo. Para mudar, ajuste o "
-                "valor das máquinas na ficha do contrato."
-            )
+            self.fields["tipo"].disabled = True
 
     def clean_arquivo(self):
         arquivo = self.cleaned_data.get("arquivo")

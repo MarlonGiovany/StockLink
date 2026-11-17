@@ -7,10 +7,9 @@
     <h4 class="mt-1 mb-1">Novo aditivo do contrato {{ contrato.identificacao }}</h4>
     <p class="text-muted">
       Numa <strong>Adição</strong>, marque as máquinas disponíveis abaixo — elas
-      são vinculadas ao contrato e a este aditivo automaticamente. Isso
-      <strong>não altera o valor do contrato</strong>, que continua sendo o
-      definido manualmente
-      ({% if contrato.valor %}R$ {{ contrato.valor|floatformat:2 }}{% else %}sem valor{% endif %}).
+      são vinculadas ao contrato e a este aditivo automaticamente.
+      Valor mensal atual do contrato:
+      <strong>{% if contrato.valor_mensal_atual is not None %}R$ {{ contrato.valor_mensal_atual|floatformat:2 }}{% else %}sem valor{% endif %}</strong>.
     </p>
 
     {% if form.non_field_errors %}
@@ -84,7 +83,7 @@
         <div class="mb-3">
           <label class="form-label">{{ form.valor.label }}</label>
           {{ form.valor }}
-          <div class="form-text">Preenchido sozinho ao marcar máquinas (soma do valor delas). Preencha à mão só quando não marcar nenhuma — ex.: numa Remoção.</div>
+          <div class="form-text">Quanto o cliente passa a pagar <strong>por mês</strong> no contrato inteiro a partir deste aditivo. Já vem com o valor atual: se não mudou (por exemplo, numa remoção sem desconto), é só manter.</div>
           {% if form.valor.errors %}<div class="text-danger small">{{ form.valor.errors|striptags }}</div>{% endif %}
         </div>
 

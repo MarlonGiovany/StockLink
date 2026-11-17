@@ -1,0 +1,359 @@
+{% extends "base.html" %}
+{% block titulo %}Dashboard Gerencial — {{ nome_sistema }}{% endblock %}
+{% block conteudo %}
+<style>
+  .dg-card { border: 1px solid var(--bs-border-color); border-radius: .75rem; background: var(--bs-body-bg);
+             padding: 1rem 1.1rem; height: 100%; text-align: left; width: 100%; color: var(--bs-body-color); }
+  button.dg-card { transition: box-shadow .15s, transform .15s; }
+  button.dg-card:hover { box-shadow: 0 .4rem 1rem rgba(0,0,0,.08); transform: translateY(-1px); }
+  .dg-rotulo { font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--bs-secondary-color); font-weight: 600; }
+  .dg-numero { font-size: 1.85rem; font-weight: 700; line-height: 1.15; margin: .25rem 0; font-variant-numeric: tabular-nums; }
+  .dg-sub { font-size: .82rem; color: var(--bs-secondary-color); }
+  .dg-verde { color: #15803D; } .dg-vermelho { color: #DC2626; } .dg-laranja { color: #C2410C; }
+  [data-bs-theme="dark"] .dg-verde { color: #4ADE80; }
+  [data-bs-theme="dark"] .dg-vermelho { color: #F87171; }
+  [data-bs-theme="dark"] .dg-laranja { color: #FB923C; }
+  .dg-indisponivel { border-style: dashed; }
+  .dg-indisponivel .dg-numero { font-size: 1.15rem; color: var(--bs-secondary-color); }
+  .dg-secao { font-size: .8rem; text-transform: uppercase; letter-spacing: .06em; font-weight: 700;
+              color: var(--bs-secondary-color); margin: 1.4rem 0 .6rem; }
+  .dg-ranking td { padding: .25rem .4rem; }
+  .dg-grafico { position: relative; height: 210px; }
+  .dg-barra { height: 6px; border-radius: 3px; background: var(--bs-secondary-bg); overflow: hidden; }
+  .dg-barra > span { display: block; height: 100%; }
+  @media print {
+    nav.navbar, .dg-nao-imprimir, .alert-dismissible { display: none !important; }
+    .dg-card { break-inside: avoid; }
+  }
+</style>
+
+{# ---------- Cabeçalho ---------- #}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">
+  <div>
+    <h4 class="mb-0">Dashboard Gerencial</h4>
+    <div class="text-secondary">
+      {{ d.rotulo }}{% if cliente %} · <strong>{{ cliente }}</strong>{% endif %}
+      {% if not d.um_mes %}<span class="text-secondary small">({{ d.qtd_meses }} meses)</span>{% endif %}
+      {% if d.em_andamento %}<span class="badge bg-info-subtle text-info-emphasis border fw-normal ms-1">{% if d.um_mes %}mês{% else %}período{% endif %} em andamento, números até hoje</span>{% endif %}
+    </div>
+    <div class="small text-secondary">Atualizado em {{ atualizado_em|date:"d/m/Y \à\s H:i" }}</div>
+  </div>
+  <div class="d-flex flex-wrap gap-2 dg-nao-imprimir">
+    <a href="?{{ query }}" class="btn btn-sm btn-outline-secondary" title="Recalcular com os dados de agora">↻ Atualizar</a>
+    <a href="{% url 'dashboard_excel' %}?{{ query }}" class="btn btn-sm btn-excel">⬇ Excel</a>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()" title="Na janela de impressão, escolha 'Salvar como PDF'">🖨 PDF / imprimir</button>
+  </div>
+</div>
+
+<div class="d-flex flex-wrap gap-1 mb-2 dg-nao-imprimir" role="group" aria-label="Atalhos de período">
+  {% for rotulo, url, ativo in atalhos %}
+    <a href="{{ url }}" class="btn btn-sm {% if ativo %}btn-primary{% else %}btn-outline-secondary{% endif %}">{{ rotulo }}</a>
+  {% endfor %}
+</div>
+
+<form method="get" class="row g-2 align-items-end mb-2 dg-nao-imprimir">
+  <div class="col-auto">
+    <label class="form-label small text-secondary mb-1" for="dg-de">De</label>
+    <div class="input-group input-group-sm">
+      <a class="btn btn-outline-secondary" href="{{ link_anterior }}" title="Período anterior">‹</a>
+      <input type="month" id="dg-de" name="de" value="{{ de_valor }}" max="{{ mes_atual_valor }}" class="form-control">
+    </div>
+  </div>
+  <div class="col-auto">
+    <label class="form-label small text-secondary mb-1" for="dg-ate">Até</label>
+    <div class="input-group input-group-sm">
+      <input type="month" id="dg-ate" name="ate" value="{{ ate_valor }}" max="{{ mes_atual_valor }}" class="form-control">
+      {% if link_seguinte %}<a class="btn btn-outline-secondary" href="{{ link_seguinte }}" title="Próximo período">›</a>{% endif %}
+    </div>
+  </div>
+  <div class="col-12 col-sm-5 col-lg-4">
+    <label class="form-label small text-secondary mb-1" for="dg-cliente">Cliente</label>
+    <select id="dg-cliente" name="cliente" class="form-select form-select-sm">
+      <option value="">Todos os clientes</option>
+      {% for c in clientes %}
+        <option value="{{ c.pk }}" {% if cliente and c.pk == cliente.pk %}selected{% endif %}>{{ c.nome }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto"><button class="btn btn-sm btn-primary">Filtrar</button></div>
+</form>
+
+<div class="small text-secondary mb-2 dg-nao-imprimir">Escolha de 1 a 12 meses. Receita recorrente e contratos ativos são a foto do fim do período; o resto soma tudo o que aconteceu dentro dele.</div>
+{% if aviso_periodo %}<div class="alert alert-info py-2 small">{{ aviso_periodo }}</div>{% endif %}
+
+{% if d.avisos %}
+<div class="alert alert-warning py-2 small mb-0">
+  <strong>⚠ Atenção aos dados:</strong>
+  <ul class="mb-0 ps-3">{% for aviso in d.avisos %}<li>{{ aviso }}</li>{% endfor %}</ul>
+</div>
+{% endif %}
+
+{# ---------- 1ª linha: financeiro ---------- #}
+<div class="dg-secao">Resultados financeiros</div>
+<div class="row g-3">
+  <div class="col-sm-6 col-xl-3">
+    <button type="button" class="dg-card dg-indisponivel" data-bs-toggle="modal" data-bs-target="#m-financeiro">
+      <div class="dg-rotulo">Faturamento</div>
+      <div class="dg-numero">Indisponível</div>
+      <div class="dg-sub">O sistema ainda não tem lançamentos de faturamento. Clique para ver o que falta.</div>
+    </button>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-recorrente">
+      <div class="dg-rotulo">Receita recorrente</div>
+      <div class="dg-numero dg-verde">R$ {{ d.recorrente.valor|floatformat:2 }}</div>
+      <div class="dg-sub">
+        {% if d.recorrente_variacao is not None %}
+          <span class="{% if d.recorrente_variacao >= 0 %}dg-verde{% else %}dg-vermelho{% endif %} fw-semibold">
+            {% if d.recorrente_variacao >= 0 %}▲{% else %}▼{% endif %} {{ d.recorrente_variacao|floatformat:1 }}%
+          </span> desde {{ d.ref_inicio|date:"d/m/Y" }} (R$ {{ d.recorrente_anterior.valor|floatformat:2 }})
+        {% else %}
+          Sem receita em {{ d.ref_inicio|date:"d/m/Y" }} para comparar
+        {% endif %}
+        <br>por mês, em {{ d.contratos_ativos }} contrato{{ d.contratos_ativos|pluralize }} ativo{{ d.contratos_ativos|pluralize }}
+      </div>
+    </button>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-perdas">
+      <div class="dg-rotulo">Receita perdida</div>
+      <div class="dg-numero {% if d.perdas.valor %}dg-vermelho{% endif %}">R$ {{ d.perdas.valor|floatformat:2 }}</div>
+      <div class="dg-sub">
+        {% if d.perdas.linhas %}
+          a menos por mês: {{ d.perdas.cancelamentos }} cancelamento{{ d.perdas.cancelamentos|pluralize }}{% if d.perdas.reducoes %} + {{ d.perdas.reducoes }} redução{{ d.perdas.reducoes|pluralize:"ões" }} por aditivo{% endif %}
+          {% with d.perdas.por_cliente.0 as maior %}<br>Maior perda: {{ maior.0 }}{% endwith %}
+        {% else %}
+          Nenhum cancelamento ou redução {{ d.no_periodo }}
+        {% endif %}
+      </div>
+    </button>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <button type="button" class="dg-card dg-indisponivel" data-bs-toggle="modal" data-bs-target="#m-financeiro">
+      <div class="dg-rotulo">Lucro operacional</div>
+      <div class="dg-numero">Indisponível</div>
+      <div class="dg-sub">
+        Faltam faturamento e despesas.
+        {% if d.custo_manutencao %}<br>Manutenções registradas {{ d.no_periodo }}: R$ {{ d.custo_manutencao|floatformat:2 }}{% endif %}
+      </div>
+    </button>
+  </div>
+</div>
+
+{# ---------- 2ª linha: comercial ---------- #}
+<div class="dg-secao">Resultados comerciais</div>
+<div class="row g-3">
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-novos">
+      <div class="dg-rotulo">Novas contratações</div>
+      <div class="dg-numero {% if d.novas.quantidade %}dg-verde{% endif %}">{{ d.novas.quantidade }}</div>
+      <div class="dg-sub">{% if d.novas.quantidade %}{{ d.novas.contratos }} contrato{{ d.novas.contratos|pluralize }} novo{{ d.novas.contratos|pluralize }} + {{ d.novas.aditivos }} aditivo{{ d.novas.aditivos|pluralize }} com aumento{% else %}Nenhuma contratação {{ d.no_periodo }}{% endif %}</div>
+    </button>
+  </div>
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-perdas">
+      <div class="dg-rotulo">Cancelamentos</div>
+      <div class="dg-numero {% if d.perdas.cancelamentos %}dg-vermelho{% endif %}">{{ d.perdas.cancelamentos }}</div>
+      <div class="dg-sub">{% if d.perdas.cancelamentos %}Clique para ver clientes e motivos{% else %}Nenhum cancelamento {{ d.no_periodo }}{% endif %}</div>
+    </button>
+  </div>
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-novos">
+      <div class="dg-rotulo">Valor das novas contratações</div>
+      <div class="dg-numero {% if d.novas.valor %}dg-verde{% endif %}">R$ {{ d.novas.valor|floatformat:2 }}</div>
+      <div class="dg-sub">
+        a mais por mês (contratos novos + aumentos por aditivo)
+        {% if d.novas.sem_valor %}<br><span class="dg-laranja">{{ d.novas.sem_valor }} contrato{{ d.novas.sem_valor|pluralize }} sem valor mensal</span>{% endif %}
+      </div>
+    </button>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="dg-card">
+      <div class="dg-rotulo">Contratos ativos</div>
+      <div class="dg-numero">{{ d.contratos_ativos }}</div>
+      <div class="dg-sub">em {{ d.referencia|date:"d/m/Y" }}</div>
+    </div>
+  </div>
+</div>
+
+{# ---------- 3ª linha: movimentação de equipamentos ---------- #}
+<div class="dg-secao">Movimentação de equipamentos</div>
+<div class="row g-3">
+  <div class="col-6 col-lg-3 col-xl-2">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-instalados">
+      <div class="dg-rotulo">Instalados</div>
+      <div class="dg-numero dg-verde">{{ d.movimentos.instalados|length }}</div>
+      <div class="dg-sub">em {{ d.movimentos.ranking_instalados|length }} cliente{{ d.movimentos.ranking_instalados|length|pluralize }}</div>
+    </button>
+  </div>
+  <div class="col-6 col-lg-3 col-xl-2">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-retirados">
+      <div class="dg-rotulo">Retirados</div>
+      <div class="dg-numero dg-laranja">{{ d.movimentos.retirados|length }}</div>
+      <div class="dg-sub">de {{ d.movimentos.ranking_retirados|length }} cliente{{ d.movimentos.ranking_retirados|length|pluralize }}</div>
+    </button>
+  </div>
+  <div class="col-md-6 col-lg-3 col-xl-4">
+    <div class="dg-card">
+      <div class="dg-rotulo mb-1">Ranking — instalados por cliente</div>
+      {% include "inventario/_dashboard_ranking.html" with linhas=d.movimentos.ranking_instalados cor="#16A34A" vazio="Nenhuma instalação neste período" alvo="#m-instalados" %}
+    </div>
+  </div>
+  <div class="col-md-6 col-lg-3 col-xl-4">
+    <div class="dg-card">
+      <div class="dg-rotulo mb-1">Ranking — retirados por cliente</div>
+      {% include "inventario/_dashboard_ranking.html" with linhas=d.movimentos.ranking_retirados cor="#EA580C" vazio="Nenhuma retirada neste período" alvo="#m-retirados" %}
+    </div>
+  </div>
+</div>
+
+{# ---------- 4ª linha: SLA ---------- #}
+<div class="dg-secao">Desempenho operacional — chamados (SLA de {{ d.sla.prazo_horas }}h)</div>
+<div class="row g-3">
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-sla">
+      <div class="dg-rotulo">Tempo médio de resolução</div>
+      <div class="dg-numero">{% if d.sla.media %}{{ d.sla.media_texto }}{% else %}—{% endif %}</div>
+      <div class="dg-sub">{% if d.sla.media %}dos chamados encerrados {{ d.no_periodo }}{% else %}Nenhum chamado encerrado {{ d.no_periodo }}{% endif %}</div>
+    </button>
+  </div>
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-sla">
+      <div class="dg-rotulo">Chamados encerrados</div>
+      <div class="dg-numero">{{ d.sla.qtd_encerrados }}</div>
+      <div class="dg-sub">
+        <span class="dg-verde">{{ d.sla.no_prazo }} no prazo</span> ·
+        <span class="{% if d.sla.fora_do_prazo %}dg-vermelho{% endif %}">{{ d.sla.fora_do_prazo }} fora</span>
+      </div>
+    </button>
+  </div>
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-sla-abertos">
+      <div class="dg-rotulo">Chamados em aberto</div>
+      <div class="dg-numero {% if d.sla.abertos_atrasados %}dg-laranja{% endif %}">{{ d.sla.qtd_em_aberto }}</div>
+      <div class="dg-sub">
+        {% if d.sla.qtd_em_aberto %}
+          {{ d.sla.abertos_atrasados }} há mais de {{ d.sla.prazo_horas }}h · média aberta {{ d.sla.media_aberto_texto }}
+        {% else %}Nenhum chamado em aberto{% endif %}
+      </div>
+    </button>
+  </div>
+  <div class="col-6 col-xl-3">
+    <button type="button" class="dg-card" data-bs-toggle="modal" data-bs-target="#m-sla">
+      <div class="dg-rotulo">Cumprimento do SLA</div>
+      {% if d.sla.percentual is not None %}
+        <div class="dg-numero {% if d.sla.percentual >= 90 %}dg-verde{% elif d.sla.percentual >= 70 %}dg-laranja{% else %}dg-vermelho{% endif %}">{{ d.sla.percentual|floatformat:0 }}%</div>
+        <div class="dg-barra"><span style="width:{{ d.sla.percentual|floatformat:0 }}%;background:{% if d.sla.percentual >= 90 %}#16A34A{% elif d.sla.percentual >= 70 %}#EA580C{% else %}#DC2626{% endif %};"></span></div>
+        <div class="dg-sub mt-1">encerrados em até {{ d.sla.prazo_horas }}h</div>
+      {% else %}
+        <div class="dg-numero">—</div>
+        <div class="dg-sub">Sem chamados encerrados para medir</div>
+      {% endif %}
+    </button>
+  </div>
+</div>
+
+{# ---------- Evolução (últimos 12 meses) ---------- #}
+<div class="dg-secao">Evolução — {% if d.um_mes %}últimos 12 meses{% else %}mês a mês no período{% endif %}</div>
+<div class="row g-3">
+  <div class="col-lg-6"><div class="dg-card">
+    <div class="dg-rotulo mb-2">Receita recorrente (R$/mês)</div>
+    <div class="dg-grafico"><canvas id="g-recorrente" aria-label="Receita recorrente por mês"></canvas></div>
+  </div></div>
+  <div class="col-lg-6"><div class="dg-card">
+    <div class="dg-rotulo mb-2">Receita nova × perdida (R$/mês)</div>
+    <div class="dg-grafico"><canvas id="g-comercial" aria-label="Receita nova e perdida por mês"></canvas></div>
+  </div></div>
+  <div class="col-lg-6"><div class="dg-card">
+    <div class="dg-rotulo mb-2">Instalados × retirados</div>
+    <div class="dg-grafico"><canvas id="g-movimentos" aria-label="Equipamentos instalados e retirados por mês"></canvas></div>
+  </div></div>
+  <div class="col-lg-6"><div class="dg-card">
+    <div class="dg-rotulo mb-2">Tempo médio de resolução (horas)</div>
+    <div class="dg-grafico"><canvas id="g-sla" aria-label="Tempo médio de resolução por mês"></canvas></div>
+  </div></div>
+</div>
+
+{# ================= Detalhamentos (janelas) ================= #}
+
+{% include "inventario/_dashboard_modais.html" %}
+
+{% endblock %}
+
+{% block scripts %}
+{{ d.serie|json_script:"dg-serie" }}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script>
+(function () {
+  if (typeof Chart === 'undefined') return;
+  var serie = JSON.parse(document.getElementById('dg-serie').textContent);
+  var rotulos = serie.map(function (s) { return s.rotulo; });
+  var graficos = [];
+
+  function cores() {
+    var css = getComputedStyle(document.documentElement);
+    return {
+      texto: css.getPropertyValue('--bs-secondary-color').trim(),
+      grade: css.getPropertyValue('--bs-border-color-translucent').trim()
+    };
+  }
+  function eixos(c, formato) {
+    return {
+      x: { ticks: { color: c.texto }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: c.texto, callback: formato }, grid: { color: c.grade } }
+    };
+  }
+  var reais = function (v) { return 'R$ ' + Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 0 }); };
+
+  function desenha() {
+    graficos.forEach(function (g) { g.destroy(); });
+    var c = cores();
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    graficos = [
+      new Chart(document.getElementById('g-recorrente'), {
+        type: 'line',
+        data: { labels: rotulos, datasets: [{ label: 'Receita recorrente',
+          data: serie.map(function (s) { return s.recorrente; }),
+          borderColor: '#16A34A', backgroundColor: 'rgba(22,163,74,.12)', fill: true, tension: .25, pointRadius: 3 }] },
+        options: { maintainAspectRatio: false, plugins: { legend: { display: false },
+          tooltip: { callbacks: { label: function (x) { return 'R$ ' + x.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); } } } },
+          scales: eixos(c, reais) }
+      }),
+      new Chart(document.getElementById('g-comercial'), {
+        type: 'bar',
+        data: { labels: rotulos, datasets: [
+          { label: 'Nova', data: serie.map(function (s) { return s.nova; }), backgroundColor: '#16A34A', borderRadius: 3 },
+          { label: 'Perdida', data: serie.map(function (s) { return s.perdida; }), backgroundColor: '#DC2626', borderRadius: 3 }
+        ] },
+        options: { maintainAspectRatio: false, plugins: { legend: { labels: { color: c.texto, boxWidth: 12 } },
+          tooltip: { callbacks: { label: function (x) { return x.dataset.label + ': R$ ' + x.parsed.y.toLocaleString('pt-BR', { minimumFractionDigits: 2 }); } } } },
+          scales: eixos(c, reais) }
+      }),
+      new Chart(document.getElementById('g-movimentos'), {
+        type: 'bar',
+        data: { labels: rotulos, datasets: [
+          { label: 'Instalados', data: serie.map(function (s) { return s.instalados; }), backgroundColor: '#16A34A', borderRadius: 3 },
+          { label: 'Retirados', data: serie.map(function (s) { return s.retirados; }), backgroundColor: '#EA580C', borderRadius: 3 }
+        ] },
+        options: { maintainAspectRatio: false, plugins: { legend: { labels: { color: c.texto, boxWidth: 12 } } },
+          scales: eixos(c, function (v) { return Number.isInteger(v) ? v : ''; }) }
+      }),
+      new Chart(document.getElementById('g-sla'), {
+        type: 'line',
+        data: { labels: rotulos, datasets: [
+          { label: 'Tempo médio (h)', data: serie.map(function (s) { return s.media_horas; }),
+            borderColor: '#2563EB', backgroundColor: '#2563EB', spanGaps: true, tension: .25, pointRadius: 3 },
+          { label: 'Prazo do SLA ({{ d.sla.prazo_horas }}h)', data: serie.map(function () { return {{ d.sla.prazo_horas }}; }),
+            borderColor: '#DC2626', borderDash: [5, 4], pointRadius: 0, borderWidth: 1.5 }
+        ] },
+        options: { maintainAspectRatio: false, plugins: { legend: { labels: { color: c.texto, boxWidth: 12 } } },
+          scales: eixos(c, function (v) { return v + 'h'; }) }
+      })
+    ];
+  }
+  desenha();
+  // Troca de tema claro/escuro: redesenha com as cores do tema novo
+  new MutationObserver(desenha).observe(document.documentElement, { attributes: true, attributeFilter: ['data-bs-theme'] });
+})();
+</script>
+{% endblock %}
