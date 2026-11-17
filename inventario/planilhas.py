@@ -168,3 +168,124 @@ def equipamentos(maquinas, titulo, com_locacao=False, com_contrato=False):
             _formata(folha, n, formato)
     _acerta_colunas(folha)
     return livro
+
+
+def _sem_fuso(momento):
+    """O Excel não guarda fuso: grava a hora de Maceió, como aparece na tela."""
+    from django.utils import timezone
+    return timezone.localtime(momento).replace(tzinfo=None) if momento else None
+
+
+def _nova_folha(livro, titulo, cabecalho):
+    folha = livro.create_sheet(titulo)
+    folha.append(cabecalho)
+    for celula in folha[1]:
+        celula.font = Font(bold=True, color="FFFFFF")
+        celula.fill = PatternFill("solid", fgColor="162D63")
+    folha.freeze_panes = "A2"
+    return folha
+
+
+def dashboard_mensal(dados, cliente=None):
+    """O Dashboard Gerencial do mês, com uma aba para cada detalhamento."""
+    livro, resumo = _planilha("Resumo", ["Indicador", "Valor"])
+    sla = dados["sla"]
+    linhas_resumo = [
+        ("Período", dados["rotulo"]),
+        ("Meses no período", dados["qtd_meses"]),
+        ("Cliente", str(cliente) if cliente else "Todos"),
+        ("Foto da receita e dos contratos em", dados["referencia"]),
+        ("Comparada com", dados["ref_inicio"]),
+        ("Faturamento", "Indisponível — o sistema não tem lançamentos de faturamento"),
+        ("Lucro operacional", "Indisponível — o sistema não tem despesas cadastradas"),
+        ("Receita recorrente (valor mensal dos contratos ativos)", dados["recorrente"]["valor"]),
+        ("Receita recorrente na véspera do período", dados["recorrente_anterior"]["valor"]),
+        ("Contratos ativos", dados["contratos_ativos"]),
+        ("Novas contratações (contratos novos + aditivos com aumento)", dados["novas"]["quantidade"]),
+        ("Contratos novos", dados["novas"]["contratos"]),
+        ("Aditivos com aumento", dados["novas"]["aditivos"]),
+        ("Valor das novas contratações (a mais por mês)", dados["novas"]["valor"]),
+        ("Contratos cancelados", dados["perdas"]["cancelamentos"]),
+        ("Reduções por aditivo", dados["perdas"]["reducoes"]),
+        ("Receita perdida (a menos por mês)", dados["perdas"]["valor"]),
+        ("Equipamentos instalados", len(dados["movimentos"]["instalados"])),
+        ("Equipamentos retirados", len(dados["movimentos"]["retirados"])),
+        ("Custo de manutenções registradas", dados["custo_manutencao"] or 0),
+        ("Chamados encerrados", sla["qtd_encerrados"]),
+        ("Tempo médio de resolução", sla["media_texto"]),
+        (f"Encerrados em até {sla['prazo_horas']}h", sla["no_prazo"]),
+        ("Encerrados fora do prazo", sla["fora_do_prazo"]),
+        ("Cumprimento do SLA (%)",
+         round(sla["percentual"], 1) if sla["percentual"] is not None else "Sem chamados encerrados"),
+        ("Chamados em aberto no fim do período", sla["qtd_em_aberto"]),
+    ]
+    for linha in linhas_resumo:
+        _adiciona_linha(resumo, list(linha))
+    for aviso in dados["avisos"]:
+        _adiciona_linha(resumo, ["Aviso", aviso])
+    for (celula,) in resumo.iter_rows(min_row=2, min_col=2, max_col=2):
+        if hasattr(celula.value, "year"):
+            celula.number_format = FORMATO_DATA
+        elif hasattr(celula.value, "as_tuple"):
+            celula.number_format = FORMATO_REAIS
+    _acerta_colunas(resumo)
+
+    def maquinas(titulo, linhas, com_motivo=False):
+        cab = ["Data", "Cliente", "INF", "Equipamento", "Marca / modelo",
+               "Valor de referência da máquina (não entra na receita)"]
+        if com_motivo:
+            cab.append("Motivo")
+        folha = _nova_folha(livro, titulo, cab)
+        for l in linhas:
+            valores = [l["data"], l["cliente"], l["inf"], l["equipamento"],
+                       l["marca_modelo"], l["valor"]]
+            if com_motivo:
+                valores.append(l["motivo"])
+            _adiciona_linha(folha, valores)
+        _formata(folha, 1, FORMATO_DATA)
+        _formata(folha, 6, FORMATO_REAIS)
+        _acerta_colunas(folha)
+
+    maquinas("Instalados", dados["movimentos"]["instalados"])
+    maquinas("Retirados", dados["movimentos"]["retirados"], com_motivo=True)
+
+    tipos = {"contrato": "Contrato novo", "aditivo": "Aditivo",
+             "cancelamento": "Cancelamento"}
+    for titulo, linhas in (("Novas contratações", dados["novas"]["linhas"]),
+                           ("Receita perdida", dados["perdas"]["linhas"])):
+        folha = _nova_folha(livro, titulo, [
+            "Data", "Tipo", "Cliente", "Descrição / motivo", "Valor mensal antes",
+            "Valor mensal depois", "Diferença por mês",
+        ])
+        for l in linhas:
+            tipo = tipos[l["tipo"]]
+            if l["tipo"] == "aditivo" and titulo == "Receita perdida":
+                tipo = "Redução por aditivo"
+            texto = l.get("motivo") if l["tipo"] == "cancelamento" else l["descricao"]
+            depois = l.get("novo") if l["tipo"] != "contrato" else l["valor"]
+            _adiciona_linha(folha, [l["data"], tipo, l["cliente"], texto or "",
+                                    l.get("anterior"), depois, l["valor"]])
+        _formata(folha, 1, FORMATO_DATA)
+        for coluna in (5, 6, 7):
+            _formata(folha, coluna, FORMATO_REAIS)
+        _acerta_colunas(folha)
+
+    for titulo, linhas in (("Chamados encerrados", sla["encerrados"]),
+                           ("Chamados em aberto", sla["em_aberto"])):
+        folha = _nova_folha(livro, titulo, [
+            "OS", "Cliente", "Equipamento", "Técnico", "Abertura", "Encerramento",
+            "Tempo", "Situação",
+        ])
+        for l in linhas:
+            situacao = ("No prazo" if l["no_prazo"] else "Fora do prazo") if l["encerrado_em"] \
+                else ("Aberto — atrasado" if not l["no_prazo"] else "Aberto")
+            _adiciona_linha(folha, [
+                l["numero"], l["cliente"], l["equipamento"], l["tecnico"],
+                _sem_fuso(l["aberto_em"]), _sem_fuso(l["encerrado_em"]),
+                l["tempo_texto"], situacao,
+            ])
+        _formata(folha, 5, "DD/MM/YYYY HH:MM")
+        _formata(folha, 6, "DD/MM/YYYY HH:MM")
+        _acerta_colunas(folha)
+
+    return livro

@@ -55,6 +55,9 @@
                 {% if pode_ver_contratos %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'contrato_lista' %}">Contratos</a></li>
                 {% endif %}
+                {% if pode_ver_dashboard %}
+                <li class="nav-item"><a class="nav-link" href="{% url 'dashboard' %}">Dashboard</a></li>
+                {% endif %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'cliente_lista' %}">Clientes</a></li>
                 <li class="nav-item"><a class="nav-link" href="{% url 'fornecedor_lista' %}">Fornecedores</a></li>
                 {% if eh_analista or user.is_staff %}

@@ -276,9 +276,12 @@ class Contrato(models.Model):
         related_name="contratos", verbose_name="Cliente",
     )
     data_contrato = models.DateField("Data do contrato", default=timezone.now)
+    # Mensal. Depois do primeiro aditivo, o valor que vale é o do último
+    # aditivo (ver valor_mensal_em); este fica como o valor original.
     valor = models.DecimalField(
-        "Valor", max_digits=12, decimal_places=2, null=True, blank=True,
+        "Valor mensal", max_digits=12, decimal_places=2, null=True, blank=True,
         validators=[validar_nao_negativo],
+        help_text="Quanto o cliente paga por mês. Mudanças depois vêm pelos aditivos.",
     )
     arquivo = models.FileField("Arquivo (PDF)", upload_to="contratos/%Y/", blank=True)
     observacoes = models.TextField("Observações", blank=True)
@@ -306,6 +309,7 @@ class Contrato(models.Model):
         permissions = [
             ("ver_contratos", "Pode ver a aba de Contratos"),
             ("ver_pdfs", "Pode abrir os PDFs anexados"),
+            ("ver_dashboard", "Pode ver o Dashboard Gerencial"),
         ]
 
     def __str__(self):
@@ -322,6 +326,28 @@ class Contrato(models.Model):
     @property
     def cancelado(self):
         return self.data_cancelamento is not None
+
+    def valor_mensal_em(self, dia=None, aditivos=None):
+        """Quanto o contrato vale por mês nesse dia (padrão: hoje).
+
+        É o valor do último aditivo até o dia (cada aditivo guarda o novo
+        total); sem aditivo, o "Valor" do contrato. None = sem valor.
+        `aditivos` evita uma consulta por contrato quando já vieram do banco.
+        """
+        dia = dia or timezone.localdate()
+        if aditivos is None:
+            aditivos = self.aditivos.all()
+        valor = self.valor
+        for aditivo in sorted(
+            (a for a in aditivos if a.valor is not None and a.data <= dia),
+            key=lambda a: (a.data, a.numero),
+        ):
+            valor = aditivo.valor
+        return valor
+
+    @property
+    def valor_mensal_atual(self):
+        return self.valor_mensal_em()
 
     @property
     def nome_arquivo(self):
@@ -381,10 +407,14 @@ class Contrato(models.Model):
 class Aditivo(models.Model):
     """Registro de um aditivo (alteração) feito dentro de um contrato.
 
-    Serve apenas como histórico: cada aditivo é numerado em sequência
-    (1, 2, 3...) e marca se foi uma adição ou remoção de equipamento, com
-    a descrição, a data e o preço do equipamento. NÃO altera o valor do
-    contrato — esse é manual.
+    Cada aditivo é numerado em sequência (1, 2, 3...), marca se foi uma
+    adição ou remoção de equipamento e guarda o **novo valor mensal do
+    contrato** a partir da sua data. É assim que o valor do contrato muda
+    ao longo do tempo (ver `Contrato.valor_mensal_em`): o campo "Valor" do
+    contrato fica sendo o valor original, de antes do primeiro aditivo.
+
+    Remover máquina não reduz o valor por si só: se o valor não mudou, o
+    aditivo repete o valor atual. Só um aditivo com valor menor reduz.
     """
 
     class Tipo(models.TextChoices):
@@ -404,10 +434,12 @@ class Aditivo(models.Model):
         "Equipamento / descrição", max_length=200,
         help_text='Ex.: "Notebook Lenovo (INF-8974)", "1 máquina removida"...',
     )
+    # Aceita vazio só por causa de aditivos antigos; o formulário exige.
     valor = models.DecimalField(
-        "Valor do equipamento", max_digits=12, decimal_places=2,
+        "Novo valor mensal do contrato", max_digits=12, decimal_places=2,
         null=True, blank=True, validators=[validar_nao_negativo],
-        help_text="Preço do equipamento desta alteração. Apenas registro — não muda o valor do contrato.",
+        help_text="Quanto o cliente passa a pagar por mês neste contrato a partir "
+                  "deste aditivo. Se o valor não mudou, repita o valor atual.",
     )
     data = models.DateField("Data do aditivo", default=timezone.now)
     arquivo = models.FileField(

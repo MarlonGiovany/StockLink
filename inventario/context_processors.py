@@ -8,7 +8,9 @@ from datetime import date
 
 from django.conf import settings
 
-from .permissoes import eh_analista, pode_ver_contratos, pode_ver_pdfs
+from .permissoes import (
+    eh_analista, pode_ver_contratos, pode_ver_dashboard, pode_ver_pdfs,
+)
 
 
 def identidade(request):
@@ -41,4 +43,5 @@ def permissoes(request):
         "eh_analista": eh_analista(user),
         "pode_ver_contratos": pode_ver_contratos(user),
         "pode_ver_pdfs": pode_ver_pdfs(user),
+        "pode_ver_dashboard": pode_ver_dashboard(user),
     }
