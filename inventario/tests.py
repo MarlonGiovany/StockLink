@@ -3411,3 +3411,102 @@ class SetorDoEquipamentoTests(BaseLogada):
                          "--confirmar", stdout=io.StringIO())
         self.assertEqual(Equipamento.objects.get(numero_patrimonio="6000").setor, "UTI 2")
         self.assertEqual(Equipamento.objects.get(numero_patrimonio="6001").setor, "")
+
+
+class CancelamentoContratoTests(BaseLogada):
+    """Cancelar contrato devolve as máquinas e manda o contrato para a aba Cancelados."""
+
+    def setUp(self):
+        super().setUp()
+        self.cliente = Cliente.objects.create(nome="PADARIA SILVA")
+        self.contrato = Contrato.objects.create(
+            cliente=self.cliente, data_contrato="2026-01-10"
+        )
+        self.maquinas = [
+            Equipamento.objects.get(numero_patrimonio="1002"),
+            Equipamento.objects.get(numero_patrimonio="1003"),
+        ]
+        for maquina in self.maquinas:
+            Locacao.objects.create(
+                equipamento=maquina, cliente=self.cliente, contrato=self.contrato,
+                valor=Decimal("100"), data_inicio="2026-01-10",
+            )
+            maquina.status = Equipamento.Status.LOCADO
+            maquina.save(update_fields=["status"])
+
+    def cancelar(self, **extra):
+        dados = {"data_cancelamento": "2026-11-16", "motivo": "Cliente fechou a loja."}
+        dados.update(extra)
+        return self.client.post(reverse("contrato_cancelar", args=[self.contrato.pk]), dados)
+
+    def test_cancelar_devolve_todas_as_maquinas(self):
+        resposta = self.cancelar()
+        self.assertEqual(resposta.status_code, 302)
+
+        self.contrato.refresh_from_db()
+        self.assertTrue(self.contrato.cancelado)
+        self.assertEqual(self.contrato.data_cancelamento, date(2026, 11, 16))
+        self.assertEqual(self.contrato.motivo_cancelamento, "Cliente fechou a loja.")
+        self.assertEqual(self.contrato.cancelado_por, self.user)
+
+        self.assertFalse(self.contrato.locacoes.filter(ativa=True).exists())
+        for maquina in self.maquinas:
+            maquina.refresh_from_db()
+            self.assertEqual(maquina.status, Equipamento.Status.DISPONIVEL)
+            locacao = maquina.locacoes.get()
+            self.assertEqual(locacao.data_fim, date(2026, 11, 16))
+            self.assertTrue(
+                maquina.movimentacoes.filter(tipo=Movimentacao.Tipo.DEVOLUCAO).exists()
+            )
+
+    def test_motivo_e_obrigatorio(self):
+        resposta = self.cancelar(motivo="   ")
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "Escreva o motivo do cancelamento.")
+        self.contrato.refresh_from_db()
+        self.assertFalse(self.contrato.cancelado)
+        self.assertEqual(self.contrato.locacoes.filter(ativa=True).count(), 2)
+
+    def test_abas_separam_ativos_e_cancelados(self):
+        Contrato.objects.create(cliente=self.cliente, titulo="CONTRATO QUE CONTINUA")
+        self.cancelar()
+
+        ativos = self.client.get(reverse("contrato_lista"))
+        self.assertEqual([c.pk for c in ativos.context["contratos"]],
+                         [Contrato.objects.get(titulo="CONTRATO QUE CONTINUA").pk])
+        self.assertEqual(ativos.context["qtd_cancelados"], 1)
+
+        cancelados = self.client.get(reverse("contrato_lista") + "?aba=cancelados")
+        self.assertEqual([c.pk for c in cancelados.context["contratos"]], [self.contrato.pk])
+        self.assertContains(cancelados, "Cliente fechou a loja.")
+
+    def test_cancelado_nao_avisa_renovacao(self):
+        self.contrato.data_contrato = timezone.now().date() - timedelta(days=360)
+        self.contrato.save()
+        self.assertTrue(self.contrato.renovacao_proxima)
+        self.cancelar()
+        self.contrato.refresh_from_db()
+        self.assertFalse(self.contrato.renovacao_proxima)
+
+    def test_cancelado_nao_recebe_maquina_nem_aditivo(self):
+        self.cancelar()
+        maquina = self.maquinas[0]
+        resposta = self.client.post(reverse("locacao_nova", args=[maquina.pk]), {
+            "cliente": self.cliente.pk, "contrato": self.contrato.pk, "valor": "50",
+            "data_inicio": "2026-11-17", "data_fim": "", "ativa": "on", "observacoes": "",
+        })
+        self.assertEqual(resposta.status_code, 200)  # formulário recusou
+        self.assertFalse(self.contrato.locacoes.filter(ativa=True).exists())
+
+        resposta = self.client.get(reverse("aditivo_novo", args=[self.contrato.pk]))
+        self.assertRedirects(resposta, reverse("contrato_detalhe", args=[self.contrato.pk]))
+
+    def test_reativar_desfaz_cancelamento_sem_relocar_maquinas(self):
+        self.cancelar()
+        resposta = self.client.post(reverse("contrato_reativar", args=[self.contrato.pk]))
+        self.assertEqual(resposta.status_code, 302)
+        self.contrato.refresh_from_db()
+        self.assertFalse(self.contrato.cancelado)
+        self.assertEqual(self.contrato.motivo_cancelamento, "")
+        self.assertIsNone(self.contrato.cancelado_por)
+        self.assertFalse(self.contrato.locacoes.filter(ativa=True).exists())

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Reativar contrato — {{ nome_sistema }}{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-6">
+    <div class="card shadow-sm"><div class="card-body">
+      <h5>Reativar contrato</h5>
+      <p>Reativar o contrato <strong>{{ contrato.identificacao }}</strong>,
+         cancelado em {{ contrato.data_cancelamento|date:"d/m/Y" }}?</p>
+      <p class="text-muted small">As máquinas devolvidas no cancelamento
+         <strong>não</strong> voltam sozinhas para o cliente. Se for o caso,
+         loque cada uma de novo pela ficha do equipamento.</p>
+      <form method="post">
+        {% csrf_token %}
+        <button class="btn btn-success">Sim, reativar</button>
+        <a href="{% url 'contrato_detalhe' contrato.pk %}" class="btn btn-outline-secondary">Voltar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

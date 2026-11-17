@@ -288,6 +288,15 @@ class Contrato(models.Model):
         verbose_name="Anexado por",
     )
 
+    # Cancelamento: o contrato continua no banco (histórico), só sai da lista
+    # de ativos e vai para a aba "Cancelados". Data vazia = contrato ativo.
+    data_cancelamento = models.DateField("Data do cancelamento", null=True, blank=True)
+    motivo_cancelamento = models.TextField("Motivo do cancelamento", blank=True)
+    cancelado_por = models.ForeignKey(
+        settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True,
+        related_name="+", verbose_name="Cancelado por",
+    )
+
     class Meta:
         verbose_name = "Contrato"
         verbose_name_plural = "Contratos"
@@ -309,6 +318,10 @@ class Contrato(models.Model):
         if self.data_contrato:
             return f"{cliente}, {self.data_contrato.strftime('%d/%m/%Y')}"
         return cliente
+
+    @property
+    def cancelado(self):
+        return self.data_cancelamento is not None
 
     @property
     def nome_arquivo(self):
@@ -355,7 +368,12 @@ class Contrato(models.Model):
 
     @property
     def renovacao_proxima(self):
-        """True quando a renovação automática está a poucos dias de acontecer."""
+        """True quando a renovação automática está a poucos dias de acontecer.
+
+        Contrato cancelado não renova, então nunca entra no aviso.
+        """
+        if self.cancelado:
+            return False
         dias = self.dias_ate_renovacao
         return dias is not None and dias <= self.DIAS_ATE_RENOVACAO
 
