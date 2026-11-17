@@ -51,7 +51,9 @@
         <div class="collapse navbar-collapse" id="nav">
             <ul class="navbar-nav me-auto">
                 <li class="nav-item"><a class="nav-link" href="{% url 'equipamento_lista' %}">Equipamentos</a></li>
+                {% if perms.inventario.view_chamado %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'chamado_lista' %}">Chamados</a></li>
+                {% endif %}
                 {% if pode_ver_contratos %}
                 <li class="nav-item"><a class="nav-link" href="{% url 'contrato_lista' %}">Contratos</a></li>
                 {% endif %}
