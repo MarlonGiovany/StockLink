@@ -7,6 +7,7 @@ from django.contrib.auth import get_user_model
 from django.core.files.uploadedfile import UploadedFile
 from django.db.models import Q
 from django.urls import reverse
+from django.utils import timezone
 
 from .models import (
     Aditivo,
@@ -257,7 +258,10 @@ class ContratoChoiceField(forms.ModelChoiceField):
 
 
 def contratos_disponiveis():
-    return Contrato.objects.select_related("cliente").all()
+    # Contrato cancelado não recebe máquina nova.
+    return Contrato.objects.select_related("cliente").filter(
+        data_cancelamento__isnull=True
+    )
 
 
 class LocacaoForm(BootstrapFormMixin, forms.ModelForm):
@@ -463,6 +467,25 @@ class ClienteForm(BootstrapFormMixin, forms.ModelForm):
                 "Já existe cliente parecido. Confira a lista abaixo antes de salvar."
             )
         return dados
+
+
+class CancelamentoContratoForm(BootstrapFormMixin, forms.Form):
+    data_cancelamento = forms.DateField(
+        label="Data do cancelamento", initial=timezone.localdate,
+        widget=forms.DateInput(attrs={"type": "date"}, format="%Y-%m-%d"),
+        error_messages={"required": "Informe a data do cancelamento."},
+    )
+    motivo = forms.CharField(
+        label="Motivo do cancelamento",
+        widget=forms.Textarea(attrs={"rows": 3}),
+        error_messages={"required": "Escreva o motivo do cancelamento."},
+    )
+
+    def clean_motivo(self):
+        motivo = self.cleaned_data["motivo"].strip()
+        if not motivo:
+            raise forms.ValidationError("Escreva o motivo do cancelamento.")
+        return motivo
 
 
 class ContratoForm(BootstrapFormMixin, forms.ModelForm):

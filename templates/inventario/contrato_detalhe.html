@@ -14,9 +14,22 @@
     {% endif %}
     {% if perms.inventario.change_contrato %}
       <a href="{% url 'contrato_editar' contrato.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
+      {% if contrato.cancelado %}
+        <a href="{% url 'contrato_reativar' contrato.pk %}" class="btn btn-sm btn-outline-success">Reativar</a>
+      {% else %}
+        <a href="{% url 'contrato_cancelar' contrato.pk %}" class="btn btn-sm btn-outline-danger">Cancelar contrato</a>
+      {% endif %}
     {% endif %}
   </div>
 </div>
+
+{% if contrato.cancelado %}
+<div class="alert alert-danger">
+  <strong>Contrato cancelado em {{ contrato.data_cancelamento|date:"d/m/Y" }}</strong>
+  {% if contrato.cancelado_por %}por {{ contrato.cancelado_por }}{% endif %}.
+  <div class="mt-1"><strong>Motivo:</strong> {{ contrato.motivo_cancelamento|linebreaksbr }}</div>
+</div>
+{% endif %}
 
 <div class="row g-3">
   <div class="col-lg-12">
@@ -155,7 +168,7 @@
   <div class="card-body">
     <div class="d-flex justify-content-between align-items-center mb-1">
       <h6 class="text-uppercase text-muted mb-0">Aditivos (histórico de alterações)</h6>
-      {% if perms.inventario.add_aditivo %}
+      {% if perms.inventario.add_aditivo and not contrato.cancelado %}
         <a href="{% url 'aditivo_novo' contrato.pk %}" class="btn btn-sm text-white" style="background:#16A34A;">+ Novo aditivo</a>
       {% endif %}
     </div>

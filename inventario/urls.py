@@ -36,6 +36,8 @@ urlpatterns = [
     path("contratos/<int:pk>/", views.contrato_detalhe, name="contrato_detalhe"),
     path("contratos/<int:pk>/editar/", views.contrato_editar, name="contrato_editar"),
     path("contratos/<int:pk>/excluir/", views.contrato_excluir, name="contrato_excluir"),
+    path("contratos/<int:pk>/cancelar/", views.contrato_cancelar, name="contrato_cancelar"),
+    path("contratos/<int:pk>/reativar/", views.contrato_reativar, name="contrato_reativar"),
     path("contratos/<int:pk>/aditivo/", views.aditivo_novo, name="aditivo_novo"),
     path("contratos/<int:pk>/valor-em-lote/", views.locacao_valor_em_lote,
          name="locacao_valor_em_lote"),

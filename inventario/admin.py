@@ -218,11 +218,12 @@ class AditivoInline(SoComAreaContratosMixin, admin.TabularInline):
 
 @admin.register(Contrato)
 class ContratoAdmin(SoComAreaContratosMixin, admin.ModelAdmin):
-    list_display = ("__str__", "titulo", "cliente", "data_contrato", "valor", "arquivo")
-    list_filter = ("data_contrato", "cliente")
+    list_display = ("__str__", "titulo", "cliente", "data_contrato", "valor", "arquivo",
+                    "data_cancelamento")
+    list_filter = ("data_contrato", "data_cancelamento", "cliente")
     search_fields = ("titulo", "cliente__nome")
     date_hierarchy = "data_contrato"
-    readonly_fields = ("criado_em", "criado_por")
+    readonly_fields = ("criado_em", "criado_por", "cancelado_por")
     inlines = [AditivoInline]
     form = form_com_arquivo_protegido("arquivo", "contrato_pdf")
     formfield_overrides = ARQUIVO_PROTEGIDO

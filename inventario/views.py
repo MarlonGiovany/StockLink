@@ -24,6 +24,7 @@ from . import planilhas
 from .forms import (
     AditivoEdicaoForm,
     AditivoForm,
+    CancelamentoContratoForm,
     ChamadoAberturaForm,
     ChamadoAnexoForm,
     ChamadoEdicaoForm,
@@ -207,7 +208,8 @@ def equipamento_detalhe(request, pk):
     if locacao_ativa and locacao_ativa.cliente_id:
         contratos_do_cliente = (
             Contrato.objects
-            .filter(cliente_id=locacao_ativa.cliente_id)
+            .filter(cliente_id=locacao_ativa.cliente_id,
+                    data_cancelamento__isnull=True)
             .annotate(
                 qtd_maquinas=Count("locacoes", filter=Q(locacoes__ativa=True))
             )
@@ -512,6 +514,12 @@ def locacao_vincular_contrato(request, pk):
         return redirect("equipamento_detalhe", pk=equipamento.pk)
 
     contrato = get_object_or_404(Contrato, pk=contrato_id)
+    if contrato.cancelado:
+        messages.error(
+            request,
+            f"O contrato {contrato.identificacao} está cancelado e não recebe máquinas.",
+        )
+        return redirect("equipamento_detalhe", pk=locacao.equipamento_id)
 
     # Mesma trava do formulário: contrato de outro cliente, não.
     if contrato.cliente_id and contrato.cliente_id != locacao.cliente_id:
@@ -823,6 +831,8 @@ ORDENS_CONTRATO = {
 @login_required
 @exige_area(VER_CONTRATOS)
 def contrato_lista(request):
+    # Duas abas na mesma tela: "ativos" (padrão) e "cancelados".
+    aba = "cancelados" if request.GET.get("aba") == "cancelados" else "ativos"
     termo = request.GET.get("q", "").strip()
     ordenar = request.GET.get("ordenar", "data_desc")
     de = request.GET.get("de", "").strip()
@@ -835,6 +845,14 @@ def contrato_lista(request):
             qtd_maquinas=Count("locacoes", filter=Q(locacoes__ativa=True))
         )
     )
+    qtd_ativos = contratos.filter(data_cancelamento__isnull=True).count()
+    qtd_cancelados = contratos.filter(data_cancelamento__isnull=False).count()
+    if aba == "cancelados":
+        contratos = contratos.select_related("cancelado_por").filter(
+            data_cancelamento__isnull=False
+        )
+    else:
+        contratos = contratos.filter(data_cancelamento__isnull=True)
     if termo:
         contratos = contratos.filter(
             Q(titulo__icontains=termo)
@@ -850,6 +868,9 @@ def contrato_lista(request):
 
     contexto = {
         "contratos": contratos,
+        "aba": aba,
+        "qtd_ativos": qtd_ativos,
+        "qtd_cancelados": qtd_cancelados,
         "termo": termo,
         "ordenar": ordenar,
         "de": de,
@@ -1020,6 +1041,90 @@ def contrato_excluir(request, pk):
 
 
 @login_required
+@permission_required("inventario.change_contrato", raise_exception=True)
+@exige_area(VER_CONTRATOS)
+def contrato_cancelar(request, pk):
+    """Cancela o contrato e devolve, de uma vez, todas as máquinas ativas nele.
+
+    Cada máquina passa pelo mesmo caminho da devolução normal: locação
+    encerrada, equipamento "Disponível" e uma Devolução no histórico.
+    """
+    contrato = get_object_or_404(Contrato, pk=pk)
+    if contrato.cancelado:
+        messages.info(request, "Este contrato já está cancelado.")
+        return redirect("contrato_detalhe", pk=contrato.pk)
+
+    locacoes = list(
+        contrato.locacoes.filter(ativa=True)
+        .select_related("equipamento", "equipamento__produto", "cliente")
+    )
+    if request.method == "POST":
+        form = CancelamentoContratoForm(request.POST)
+        if form.is_valid():
+            data = form.cleaned_data["data_cancelamento"]
+            with transaction.atomic():
+                for locacao in locacoes:
+                    locacao.ativa = False
+                    if not locacao.data_fim:
+                        locacao.data_fim = data
+                    locacao.save(update_fields=["ativa", "data_fim"])
+                    equipamento = locacao.equipamento
+                    equipamento.status = Equipamento.Status.DISPONIVEL
+                    equipamento.save(update_fields=["status"])
+                    registrar_movimentacao(
+                        equipamento, Movimentacao.Tipo.DEVOLUCAO,
+                        f"Devolução de {locacao.cliente} em {locacao.data_fim:%d/%m/%Y} "
+                        f"(cancelamento do contrato {contrato.identificacao}).",
+                        request.user,
+                    )
+                contrato.data_cancelamento = data
+                contrato.motivo_cancelamento = form.cleaned_data["motivo"]
+                contrato.cancelado_por = request.user
+                contrato.save(update_fields=[
+                    "data_cancelamento", "motivo_cancelamento", "cancelado_por",
+                ])
+            texto = f"Contrato {contrato.identificacao} cancelado."
+            if locacoes:
+                texto += f" {len(locacoes)} máquina(s) devolvida(s) e disponível(is)."
+            messages.success(request, texto)
+            return redirect("contrato_detalhe", pk=contrato.pk)
+    else:
+        form = CancelamentoContratoForm()
+    return render(
+        request, "inventario/contrato_cancelar.html",
+        {"contrato": contrato, "form": form, "locacoes": locacoes},
+    )
+
+
+@login_required
+@permission_required("inventario.change_contrato", raise_exception=True)
+@exige_area(VER_CONTRATOS)
+def contrato_reativar(request, pk):
+    """Desfaz um cancelamento feito por engano.
+
+    As máquinas devolvidas no cancelamento NÃO voltam sozinhas: se for o
+    caso, cada uma é locada de novo pela ficha do equipamento.
+    """
+    contrato = get_object_or_404(Contrato, pk=pk)
+    if not contrato.cancelado:
+        return redirect("contrato_detalhe", pk=contrato.pk)
+    if request.method == "POST":
+        contrato.data_cancelamento = None
+        contrato.motivo_cancelamento = ""
+        contrato.cancelado_por = None
+        contrato.save(update_fields=[
+            "data_cancelamento", "motivo_cancelamento", "cancelado_por",
+        ])
+        messages.success(
+            request,
+            f"Contrato {contrato.identificacao} reativado. As máquinas devolvidas "
+            "no cancelamento precisam ser locadas de novo, se for o caso.",
+        )
+        return redirect("contrato_detalhe", pk=contrato.pk)
+    return render(request, "inventario/contrato_reativar.html", {"contrato": contrato})
+
+
+@login_required
 @exige_area(VER_CONTRATOS)
 def contrato_detalhe(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
@@ -1054,6 +1159,9 @@ def contrato_detalhe(request, pk):
 @exige_area(VER_CONTRATOS)
 def aditivo_novo(request, pk):
     contrato = get_object_or_404(Contrato, pk=pk)
+    if contrato.cancelado:
+        messages.error(request, "Contrato cancelado não recebe aditivo. Reative-o antes.")
+        return redirect("contrato_detalhe", pk=contrato.pk)
     if request.method == "POST":
         form = AditivoForm(request.POST, request.FILES)
         if form.is_valid():

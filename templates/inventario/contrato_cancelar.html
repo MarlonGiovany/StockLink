@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block titulo %}Cancelar contrato — {{ nome_sistema }}{% endblock %}
+{% block conteudo %}
+<div class="row justify-content-center">
+  <div class="col-lg-7">
+    <div class="card shadow-sm border-danger"><div class="card-body">
+      <h5 class="text-danger">Cancelar contrato</h5>
+      <p>Cancelar o contrato <strong>{{ contrato.identificacao }}</strong>?
+         Ele sai da lista de ativos e passa para a aba <strong>Cancelados</strong>,
+         com todo o histórico guardado.</p>
+
+      {% if locacoes %}
+        <div class="alert alert-warning small">
+          <strong>{{ locacoes|length }} máquina{{ locacoes|length|pluralize }} ativa{{ locacoes|length|pluralize }}
+          neste contrato {{ locacoes|length|pluralize:"será devolvida,serão devolvidas" }}</strong>
+          e {{ locacoes|length|pluralize:"ficará,ficarão" }} <strong>Disponível</strong>:
+          <ul class="mb-0 mt-1">
+            {% for l in locacoes %}<li>{{ l.equipamento }}</li>{% endfor %}
+          </ul>
+        </div>
+      {% else %}
+        <p class="text-muted small">Nenhuma máquina ativa neste contrato.</p>
+      {% endif %}
+
+      <form method="post" novalidate>
+        {% csrf_token %}
+        <div class="mb-3">
+          <label class="form-label" for="{{ form.data_cancelamento.id_for_label }}">{{ form.data_cancelamento.label }}</label>
+          {{ form.data_cancelamento }}
+          {% if form.data_cancelamento.errors %}<div class="text-danger small">{{ form.data_cancelamento.errors|striptags }}</div>{% endif %}
+        </div>
+        <div class="mb-3">
+          <label class="form-label" for="{{ form.motivo.id_for_label }}">{{ form.motivo.label }}</label>
+          {{ form.motivo }}
+          {% if form.motivo.errors %}<div class="text-danger small">{{ form.motivo.errors|striptags }}</div>{% endif %}
+        </div>
+        <button class="btn btn-danger">Confirmar cancelamento</button>
+        <a href="{% url 'contrato_detalhe' contrato.pk %}" class="btn btn-outline-secondary">Voltar</a>
+      </form>
+    </div></div>
+  </div>
+</div>
+{% endblock %}

@@ -16,7 +16,21 @@
   {% endif %}
 </div>
 
+<ul class="nav nav-tabs mb-3">
+  <li class="nav-item">
+    <a class="nav-link {% if aba == 'ativos' %}active{% endif %}" href="{% url 'contrato_lista' %}">
+      Ativos <span class="badge bg-body-secondary text-body border fw-normal">{{ qtd_ativos }}</span>
+    </a>
+  </li>
+  <li class="nav-item">
+    <a class="nav-link {% if aba == 'cancelados' %}active{% endif %}" href="{% url 'contrato_lista' %}?aba=cancelados">
+      Cancelados <span class="badge bg-body-secondary text-body border fw-normal">{{ qtd_cancelados }}</span>
+    </a>
+  </li>
+</ul>
+
 <form method="get" class="row g-2 mb-3 align-items-end">
+  {% if aba == 'cancelados' %}<input type="hidden" name="aba" value="cancelados">{% endif %}
   <div class="col-md-4">
     <label class="form-label small text-muted mb-1">Buscar</label>
     <input type="text" name="q" value="{{ termo }}" class="form-control"
@@ -49,7 +63,12 @@
       <thead class="table-light">
         <tr>
           <th>Cliente</th><th>Título / objeto</th>
-          <th>Máquinas</th><th>Data</th><th>Renovação</th><th>Valor</th><th>PDF</th><th></th>
+          {% if aba == 'cancelados' %}
+            <th>Data</th><th>Cancelado em</th><th>Motivo</th><th>Cancelado por</th>
+          {% else %}
+            <th>Máquinas</th><th>Data</th><th>Renovação</th>
+          {% endif %}
+          <th>Valor</th><th>PDF</th><th></th>
         </tr>
       </thead>
       <tbody>
@@ -57,6 +76,12 @@
         <tr>
           <td><a href="{% url 'contrato_detalhe' c.pk %}" class="text-decoration-none"><strong>{{ c.cliente|default:"Sem cliente" }}</strong></a></td>
           <td>{{ c.titulo|default:"—" }}</td>
+          {% if aba == 'cancelados' %}
+          <td>{{ c.data_contrato|date:"d/m/Y" }}</td>
+          <td><span class="badge bg-danger fw-normal">{{ c.data_cancelamento|date:"d/m/Y" }}</span></td>
+          <td class="small" style="max-width:280px;">{{ c.motivo_cancelamento|default:"—"|truncatechars:120 }}</td>
+          <td class="small">{{ c.cancelado_por|default:"—" }}</td>
+          {% else %}
           <td>
             {% if c.qtd_maquinas %}
               <span class="badge bg-body-secondary text-body border">{{ c.qtd_maquinas }}</span>
@@ -75,6 +100,7 @@
               <span class="text-muted small">{{ c.proxima_renovacao|date:"d/m/Y" }}</span>
             {% endif %}
           </td>
+          {% endif %}
           <td>{% if c.valor %}R$ {{ c.valor|floatformat:2 }}{% else %}—{% endif %}</td>
           <td>
             {% if c.arquivo and pode_ver_pdfs %}
@@ -94,7 +120,7 @@
           </td>
         </tr>
         {% empty %}
-        <tr><td colspan="8" class="text-center text-muted py-4">Nenhum contrato encontrado.</td></tr>
+        <tr><td colspan="8" class="text-center text-muted py-4">{% if aba == 'cancelados' %}Nenhum contrato cancelado.{% else %}Nenhum contrato encontrado.{% endif %}</td></tr>
         {% endfor %}
       </tbody>
     </table>
