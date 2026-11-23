@@ -43,7 +43,19 @@ guardado separadamente (fora do Git).
   - **Técnico** — cadastra equipamento, registra manutenção e cuida só das
     OS dele.
 - **Áreas restritas** liberadas pessoa por pessoa pelo Analista: a aba
-  **Contratos** e os **PDFs anexados**.
+  **Contratos**, os **PDFs anexados**, o **Dashboard Gerencial** e o
+  **Sistema de Tarefas**.
+- **Aba Tarefas:** abre o Sistema de Tarefas
+  (inforlink-tarefas.vercel.app) em outra aba, **já logado**, sem pedir senha.
+  O StockLink gera um passe assinado que vale 60 segundos e uma vez só
+  (`inventario/tarefas_sso.py`). Para funcionar:
+  1. a variável de ambiente `TAREFAS_SSO_SECRET` precisa ter a **mesma** chave
+     cadastrada na Vercel (sem ela, a aba avisa que o acesso não está
+     configurado); `TAREFAS_URL` é opcional e já aponta para o endereço do
+     sistema;
+  2. o Analista libera a área **Sistema de Tarefas** para a pessoa;
+  3. no Sistema de Tarefas, um administrador liga o perfil da pessoa ao login
+     dela no StockLink, em **Equipe → Ligar StockLink**.
 - Página de **acesso negado** clara, explicando o que faltou.
 
 ### Equipamentos
