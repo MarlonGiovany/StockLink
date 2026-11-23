@@ -21,6 +21,7 @@ from django.utils.text import slugify
 
 from . import dashboard as painel_gerencial
 from . import planilhas
+from . import tarefas_sso
 
 from .forms import (
     AditivoEdicaoForm,
@@ -57,6 +58,7 @@ from .permissoes import (
     VER_CONTRATOS,
     VER_DASHBOARD,
     VER_PDFS,
+    VER_TAREFAS,
     aplica_perfil,
     exige_analista,
     eh_analista,
@@ -2265,3 +2267,28 @@ def dashboard_excel(request):
     if cliente:
         nome += "-" + slugify(cliente.nome)
     return _entrega_planilha(planilhas.dashboard_mensal(dados, cliente), nome)
+
+
+@login_required
+@exige_area(VER_TAREFAS)
+def tarefas_abrir(request):
+    """Aba Tarefas: abre o Sistema de Tarefas já logado, sem pedir senha.
+
+    Gera um passe que vale 60 segundos e uma vez só (ver tarefas_sso.py) e
+    manda o navegador para o Sistema de Tarefas com o passe no fragmento do
+    endereço. Lá, o passe é conferido e o painel abre no perfil ligado a este
+    login do StockLink.
+    """
+    passe = tarefas_sso.gera_passe(request.user.get_username())
+    if passe is None:
+        messages.error(
+            request,
+            "O acesso ao Sistema de Tarefas ainda não foi configurado neste "
+            "servidor (falta a chave TAREFAS_SSO_SECRET). Avise o Analista.",
+        )
+        return redirect("equipamento_lista")
+    resposta = redirect(tarefas_sso.endereco_de_entrada(passe))
+    # O passe não pode ficar guardado em cache nem vazar pelo Referer
+    resposta["Cache-Control"] = "no-store"
+    resposta["Referrer-Policy"] = "no-referrer"
+    return resposta

@@ -229,6 +229,12 @@ TEMA_NATAL = os.environ.get('DJANGO_TEMA_NATAL', 'auto').lower()
 # O login diferencia maiúsculas: em produção é "Admin", com A maiúsculo.
 USUARIO_ANALISTA = 'Admin'
 
+# Sistema de Tarefas (inforlink-tarefas): aba "Tarefas" com login automático
+# (ver inventario/tarefas_sso.py). A chave é a mesma cadastrada na Vercel como
+# TAREFAS_SSO_SECRET; sem ela a aba avisa que o acesso não está configurado.
+TAREFAS_URL = os.environ.get('TAREFAS_URL', 'https://inforlink-tarefas.vercel.app')
+TAREFAS_SSO_SECRET = os.environ.get('TAREFAS_SSO_SECRET', '')
+
 # Autenticação
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'equipamento_lista'
