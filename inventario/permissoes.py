@@ -8,7 +8,8 @@ Perfis
 
   - abre a tela "Usuários e permissões";
   - escolhe o perfil de cada pessoa (Técnico, Recepção, Superusuário);
-  - libera as áreas restritas (aba Contratos, PDFs e Dashboard Gerencial);
+  - libera as áreas restritas (aba Contratos, PDFs, Dashboard Gerencial e
+    Sistema de Tarefas);
   - cria e edita usuários e grupos no ``/admin/``.
 
 * **Superusuário** — só quem o Analista escolher. Faz tudo nas telas, mas
@@ -30,7 +31,9 @@ precisam ser superusuários para trabalhar.
 * ``ver_contratos`` — a aba **Contratos** inteira;
 * ``ver_pdfs``      — os PDFs anexados (contrato, aditivo e o PDF que aparece
   na ficha da máquina);
-* ``ver_dashboard`` — o **Dashboard Gerencial** (receita, contratos e SLA).
+* ``ver_dashboard`` — o **Dashboard Gerencial** (receita, contratos e SLA);
+* ``ver_tarefas``   — a aba **Tarefas**, que abre o Sistema de Tarefas já
+  logado (ver ``tarefas_sso.py``).
 
 Por que não usar o ``user.has_perm()`` direto nas áreas? Porque o Django
 devolve ``True`` para qualquer superusuário, e ser superusuário não libera
@@ -48,6 +51,7 @@ from django.db.models import Q
 VER_CONTRATOS = "ver_contratos"
 VER_PDFS = "ver_pdfs"
 VER_DASHBOARD = "ver_dashboard"
+VER_TAREFAS = "ver_tarefas"
 
 # Grupos dos perfis que não são superusuário (criados na migração 0018)
 GRUPO_TECNICO = "Técnico"
@@ -78,6 +82,9 @@ AREAS = [
      "Abrir os PDFs do contrato, dos aditivos e o PDF que aparece na ficha da máquina."),
     (VER_DASHBOARD, "Dashboard Gerencial",
      "Ver o painel mensal com receita, contratos, movimentação de máquinas e SLA."),
+    (VER_TAREFAS, "Sistema de Tarefas",
+     "Mostrar a aba Tarefas, que abre o Sistema de Tarefas já logado no perfil "
+     "ligado a este usuário."),
 ]
 
 
@@ -201,6 +208,10 @@ def pode_ver_pdfs(user):
 
 def pode_ver_dashboard(user):
     return tem_area(user, VER_DASHBOARD)
+
+
+def pode_ver_tarefas(user):
+    return tem_area(user, VER_TAREFAS)
 
 
 def exige_area(codename):

@@ -10,6 +10,7 @@ from django.conf import settings
 
 from .permissoes import (
     eh_analista, pode_ver_contratos, pode_ver_dashboard, pode_ver_pdfs,
+    pode_ver_tarefas,
 )
 
 
@@ -44,4 +45,5 @@ def permissoes(request):
         "pode_ver_contratos": pode_ver_contratos(user),
         "pode_ver_pdfs": pode_ver_pdfs(user),
         "pode_ver_dashboard": pode_ver_dashboard(user),
+        "pode_ver_tarefas": pode_ver_tarefas(user),
     }
