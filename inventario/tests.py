@@ -3925,3 +3925,123 @@ class PerfilFinanceiroTests(BaseLogada):
         grupos = {g.name for g in self.fin.groups.all()}
         self.assertEqual(grupos, {"Técnico"})
         self.assertEqual(perfil_do_usuario(self.fin, grupos), "tecnico")
+
+
+CHAVE_DE_TESTE = "chave-de-teste-do-sistema-de-tarefas-0123456789"
+
+
+def _abre_passe(passe, chave=CHAVE_DE_TESTE):
+    """Confere a assinatura como o Sistema de Tarefas faz e devolve o corpo."""
+    import base64
+    import hashlib
+    import hmac
+
+    def b64(texto):
+        return base64.urlsafe_b64decode(texto + "=" * (-len(texto) % 4))
+
+    cabecalho, corpo, assinatura = passe.split(".")
+    esperado = hmac.new(
+        chave.encode(), f"{cabecalho}.{corpo}".encode(), hashlib.sha256
+    ).digest()
+    if not hmac.compare_digest(esperado, b64(assinatura)):
+        raise AssertionError("assinatura inválida")
+    return json.loads(b64(cabecalho)), json.loads(b64(corpo))
+
+
+@override_settings(
+    TAREFAS_SSO_SECRET=CHAVE_DE_TESTE, TAREFAS_URL="https://tarefas.exemplo/",
+)
+class AbaTarefasTests(BaseComPerfis):
+    """Aba Tarefas: só para quem o Analista liberar; gera um passe assinado
+    que leva ao Sistema de Tarefas já logado."""
+
+    def passe_de(self, resposta):
+        self.assertEqual(resposta.status_code, 302)
+        inicio = "https://tarefas.exemplo/sso#passe="
+        self.assertTrue(resposta["Location"].startswith(inicio), resposta["Location"])
+        return resposta["Location"][len(inicio):]
+
+    def libera(self, usuario):
+        from django.contrib.auth.models import Permission
+        usuario.user_permissions.add(Permission.objects.get(codename="ver_tarefas"))
+
+    def test_analista_abre_e_o_passe_e_dele(self):
+        passe = self.passe_de(self.client.get(reverse("tarefas_abrir")))
+        cabecalho, corpo = _abre_passe(passe)
+        self.assertEqual(cabecalho, {"alg": "HS256", "typ": "JWT"})
+        self.assertEqual(corpo["sub"], settings.USUARIO_ANALISTA)
+        self.assertEqual(corpo["iss"], "stocklink")
+        self.assertEqual(corpo["aud"], "inforlink-tarefas")
+        self.assertEqual(corpo["exp"] - corpo["iat"], 60)
+        self.assertGreaterEqual(len(corpo["jti"]), 16)
+
+    def test_cada_clique_gera_um_passe_diferente(self):
+        um = _abre_passe(self.passe_de(self.client.get(reverse("tarefas_abrir"))))[1]
+        outro = _abre_passe(self.passe_de(self.client.get(reverse("tarefas_abrir"))))[1]
+        self.assertNotEqual(um["jti"], outro["jti"])
+
+    def test_passe_nao_fica_em_cache_nem_vaza_pelo_referer(self):
+        resposta = self.client.get(reverse("tarefas_abrir"))
+        self.assertEqual(resposta["Cache-Control"], "no-store")
+        self.assertEqual(resposta["Referrer-Policy"], "no-referrer")
+
+    def test_chave_errada_nao_confere(self):
+        passe = self.passe_de(self.client.get(reverse("tarefas_abrir")))
+        with self.assertRaises(AssertionError):
+            _abre_passe(passe, chave="outra-chave-qualquer-com-mais-de-32-letras")
+
+    def test_sem_a_area_nao_entra_nem_ve_a_aba(self):
+        for usuario in (self.tecnico, self.recepcao, self.outro_super):
+            self.client.force_login(usuario)
+            self.assertEqual(self.client.get(reverse("tarefas_abrir")).status_code, 403)
+            tela = self.client.get(reverse("equipamento_lista"))
+            self.assertNotContains(tela, reverse("tarefas_abrir"))
+
+    def test_com_a_area_ve_a_aba_e_o_passe_sai_no_login_dele(self):
+        self.libera(self.recepcao)
+        self.client.force_login(self.recepcao)
+        tela = self.client.get(reverse("equipamento_lista"))
+        self.assertContains(tela, reverse("tarefas_abrir"))
+        passe = self.passe_de(self.client.get(reverse("tarefas_abrir")))
+        self.assertEqual(_abre_passe(passe)[1]["sub"], "Pedrorios1")
+
+    def test_analista_libera_pela_tela_de_permissoes(self):
+        tela = self.client.get(reverse("permissoes_usuarios"))
+        self.assertContains(tela, "Sistema de Tarefas")
+        self.client.post(
+            reverse("permissoes_usuarios"),
+            {f"perfil_{self.tecnico.pk}": "tecnico",
+             f"ver_tarefas_{self.tecnico.pk}": "on"},
+        )
+        self.client.force_login(self.tecnico)
+        passe = self.passe_de(self.client.get(reverse("tarefas_abrir")))
+        self.assertEqual(_abre_passe(passe)[1]["sub"], "tecnico")
+
+    def test_trocar_perfil_mantem_a_area_tarefas(self):
+        from .permissoes import aplica_perfil
+        self.libera(self.tecnico)
+        aplica_perfil(self.tecnico, "recepcao")
+        self.client.force_login(self.tecnico)
+        self.assertEqual(self.client.get(reverse("tarefas_abrir")).status_code, 302)
+
+    def test_nenhum_perfil_ganha_a_area_sozinho(self):
+        from django.contrib.auth.models import Group
+        for grupo in Group.objects.all():
+            self.assertFalse(grupo.permissions.filter(codename="ver_tarefas").exists(), grupo)
+
+    def test_deslogado_vai_para_o_login(self):
+        self.client.logout()
+        resposta = self.client.get(reverse("tarefas_abrir"))
+        self.assertEqual(resposta.status_code, 302)
+        self.assertIn(reverse("login"), resposta["Location"])
+
+    @override_settings(TAREFAS_SSO_SECRET="")
+    def test_sem_chave_avisa_e_nao_sai_do_sistema(self):
+        resposta = self.client.get(reverse("tarefas_abrir"), follow=True)
+        self.assertRedirects(resposta, reverse("equipamento_lista"))
+        self.assertContains(resposta, "ainda não foi configurado")
+
+    @override_settings(TAREFAS_SSO_SECRET="curta")
+    def test_chave_curta_demais_conta_como_sem_chave(self):
+        resposta = self.client.get(reverse("tarefas_abrir"))
+        self.assertRedirects(resposta, reverse("equipamento_lista"))

@@ -51,6 +51,9 @@ urlpatterns = [
     path("dashboard/", views.dashboard, name="dashboard"),
     path("dashboard/excel/", views.dashboard_excel, name="dashboard_excel"),
 
+    # Aba Tarefas: abre o Sistema de Tarefas já logado (inventario/tarefas_sso.py)
+    path("tarefas/", views.tarefas_abrir, name="tarefas_abrir"),
+
     path("permissoes/", views.permissoes_usuarios, name="permissoes_usuarios"),
     path("permissoes/<int:pk>/senha/", views.usuario_trocar_senha,
          name="usuario_trocar_senha"),

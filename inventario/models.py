@@ -310,6 +310,7 @@ class Contrato(models.Model):
             ("ver_contratos", "Pode ver a aba de Contratos"),
             ("ver_pdfs", "Pode abrir os PDFs anexados"),
             ("ver_dashboard", "Pode ver o Dashboard Gerencial"),
+            ("ver_tarefas", "Pode abrir o Sistema de Tarefas pela aba Tarefas"),
         ]
 
     def __str__(self):
