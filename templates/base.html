@@ -91,7 +91,7 @@
             </ul>
             <button type="button" id="alterna-tema" class="btn btn-sm btn-outline-light me-3"
                     title="Alternar entre tela clara e escura">
-                <span id="icone-tema">🌙</span>
+                <i id="icone-tema" class="bi bi-moon-stars-fill"></i>
             </button>
             <span class="navbar-text text-white-50 me-3">Olá, {{ user.get_username }}</span>
             <form action="{% url 'logout' %}" method="post" class="d-inline">
@@ -126,7 +126,7 @@
 
     function atualizaIcone() {
         var escuro = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-        icone.textContent = escuro ? '☀️' : '🌙';
+        icone.className = escuro ? 'bi bi-sun-fill' : 'bi bi-moon-stars-fill';
     }
     atualizaIcone();
 

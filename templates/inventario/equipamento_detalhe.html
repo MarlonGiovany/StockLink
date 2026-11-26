@@ -76,7 +76,7 @@
                 {{ locacao_ativa.contrato.cliente|default:"Sem cliente" }}
               {% endif %}
               {% if locacao_ativa.contrato.arquivo and pode_ver_pdfs %}
-                · <a href="{% url 'contrato_pdf' locacao_ativa.contrato.pk %}" target="_blank">📄 PDF</a>
+                · <a href="{% url 'contrato_pdf' locacao_ativa.contrato.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf-fill"></i> PDF</a>
               {% endif %}
               {% with total=locacao_ativa.contrato.maquinas_ativas %}
                 {% if total > 1 %}
@@ -119,7 +119,7 @@
               <p class="mb-0 mt-2">
                 {% if contratos_do_cliente %}<span class="text-muted small">ou </span>{% endif %}
                 <a href="{% url 'contrato_novo' %}?locacao={{ locacao_ativa.pk }}"
-                   class="btn btn-sm btn-outline-primary py-0">📎 Criar contrato novo</a>
+                   class="btn btn-sm btn-outline-primary py-0"><i class="bi bi-file-earmark-plus-fill"></i> Criar contrato novo</a>
               </p>
             {% endif %}
           {% endif %}

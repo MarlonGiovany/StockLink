@@ -24,7 +24,7 @@
               <td>INF-{{ c.equipamento.numero_patrimonio }}</td>
               <td>{% if c.tecnico %}{{ c.tecnico.get_username }}{% else %}—{% endif %}</td>
               <td class="text-nowrap">{{ c.encerrado_em|date:"d/m/Y H:i" }}</td>
-              <td>{% if c.arquivo_os %}<span title="OS digitalizada anexada — também será apagada">📎</span>{% endif %}</td>
+              <td>{% if c.arquivo_os %}<span title="OS digitalizada anexada — também será apagada"><i class="bi bi-paperclip"></i></span>{% endif %}</td>
             </tr>
             {% endfor %}
           </tbody>

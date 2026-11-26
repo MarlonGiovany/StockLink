@@ -10,7 +10,7 @@
   </div>
   <div class="text-end">
     {% if contrato.arquivo and pode_ver_pdfs %}
-      <a href="{% url 'contrato_pdf' contrato.pk %}" target="_blank" class="btn btn-sm btn-outline-danger">📄 Abrir PDF</a>
+      <a href="{% url 'contrato_pdf' contrato.pk %}" target="_blank" class="btn btn-sm btn-outline-danger"><i class="bi bi-file-earmark-pdf-fill"></i> Abrir PDF</a>
     {% endif %}
     {% if perms.inventario.change_contrato %}
       <a href="{% url 'contrato_editar' contrato.pk %}" class="btn btn-sm btn-outline-secondary">Editar</a>
@@ -113,7 +113,7 @@
                   {% if l.aditivo %}
                     Nº {{ l.aditivo.numero }}
                     {% if l.aditivo.arquivo and pode_ver_pdfs %}
-                      · <a href="{% url 'aditivo_pdf' l.aditivo.pk %}" target="_blank">📄</a>
+                      · <a href="{% url 'aditivo_pdf' l.aditivo.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf-fill"></i></a>
                     {% endif %}
                   {% else %}
                     <span class="text-muted">—</span>
@@ -200,11 +200,11 @@
               <td class="text-end">{% if a.valor %}R$ {{ a.valor|floatformat:2 }}{% else %}—{% endif %}</td>
               <td>{{ a.data|date:"d/m/Y" }}</td>
               <td>
-                {% if a.arquivo and pode_ver_pdfs %}<a href="{% url 'aditivo_pdf' a.pk %}" target="_blank">📄</a>{% else %}—{% endif %}
+                {% if a.arquivo and pode_ver_pdfs %}<a href="{% url 'aditivo_pdf' a.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf-fill"></i></a>{% else %}—{% endif %}
               </td>
               <td class="text-end text-nowrap">
                 {% if perms.inventario.change_aditivo %}
-                  <a href="{% url 'aditivo_editar' a.pk %}" class="btn btn-sm btn-outline-secondary py-0" title="Editar aditivo">✎</a>
+                  <a href="{% url 'aditivo_editar' a.pk %}" class="btn btn-sm btn-outline-secondary py-0" title="Editar aditivo"><i class="bi bi-pencil-fill"></i></a>
                 {% endif %}
                 {% if perms.inventario.delete_aditivo and a.id == ultimo_aditivo_id %}
                   <a href="{% url 'aditivo_excluir' a.pk %}" class="btn btn-sm btn-outline-danger py-0">×</a>

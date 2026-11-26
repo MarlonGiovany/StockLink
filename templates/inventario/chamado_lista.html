@@ -24,8 +24,8 @@
       <button class="btn btn-outline-secondary dropdown-toggle" type="button"
               data-bs-toggle="dropdown" aria-expanded="false">Mais</button>
       <ul class="dropdown-menu dropdown-menu-end">
-        <li><a class="dropdown-item py-2" href="{% url 'chamado_painel' %}" target="_blank">🖥️ Painel da área técnica</a></li>
-        <li><a class="dropdown-item py-2" href="{% url 'chamado_historico' %}">📋 Histórico por técnico</a></li>
+        <li><a class="dropdown-item py-2" href="{% url 'chamado_painel' %}" target="_blank"><i class="bi bi-display-fill"></i> Painel da área técnica</a></li>
+        <li><a class="dropdown-item py-2" href="{% url 'chamado_historico' %}"><i class="bi bi-clock-history"></i> Histórico por técnico</a></li>
       </ul>
     </div>
   </div>
@@ -42,7 +42,7 @@
       </a>
       <a href="{% url 'chamado_lista' %}?status=ENCERRADO"
          class="btn {% if status == 'ENCERRADO' %}btn-success{% else %}btn-outline-success{% endif %}">
-        ✅ Encerrados
+        <i class="bi bi-check-circle-fill"></i> Encerrados
         {% if qtd_encerrados %}<span class="badge bg-body-secondary text-body ms-1">{{ qtd_encerrados }}</span>{% endif %}
       </a>
       <a href="{% url 'chamado_lista' %}?status="
@@ -52,10 +52,10 @@
     </div>
     {# Desktop: os atalhos à vista (no celular estão no menu "Mais") #}
     <a href="{% url 'chamado_painel' %}" class="btn btn-outline-secondary d-none d-lg-inline-block" target="_blank">
-      🖥️ Painel da área técnica
+      <i class="bi bi-display-fill"></i> Painel da área técnica
     </a>
     <a href="{% url 'chamado_historico' %}" class="btn btn-outline-secondary d-none d-lg-inline-block">
-      📋 Histórico por técnico
+      <i class="bi bi-clock-history"></i> Histórico por técnico
     </a>
     {% if perms.inventario.add_chamado %}
       <a href="{% url 'chamado_novo' %}" class="btn text-white col-12 col-lg-auto" style="background:#16A34A;">
@@ -69,7 +69,7 @@
 <button class="btn btn-outline-primary w-100 mb-2 d-lg-none" type="button"
         data-bs-toggle="collapse" data-bs-target="#filtros-chamados"
         aria-expanded="false" aria-controls="filtros-chamados">
-  🔎 Filtros{% if cliente or tecnico or de or ate %} <span class="badge bg-primary ms-1">ativos</span>{% endif %}
+  <i class="bi bi-funnel-fill"></i> Filtros{% if cliente or tecnico or de or ate %} <span class="badge bg-primary ms-1">ativos</span>{% endif %}
 </button>
 <form method="get" id="filtros-chamados" class="row g-2 align-items-end mb-3 collapse d-lg-flex">
   <div class="col-12 col-md-4">
@@ -126,7 +126,7 @@
   {% csrf_token %}
   <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
     <button type="submit" class="btn btn-sm btn-outline-danger" id="btn-excluir" disabled>
-      🗑️ Excluir selecionados (<span id="conta-excluir">0</span>)
+      <i class="bi bi-trash-fill"></i> Excluir selecionados (<span id="conta-excluir">0</span>)
     </button>
     <label class="d-lg-none small d-flex align-items-center gap-2 mb-0">
       <input type="checkbox" class="form-check-input mt-0 marcar-todos-excluir"> Marcar todos
@@ -217,10 +217,10 @@
           <td class="cel-acoes text-end text-nowrap">
             <div class="acoes d-inline-flex gap-1 align-items-center">
               {% if c.arquivo_os %}
-                <span class="badge bg-body-secondary text-body border align-self-center" title="OS digitalizada anexada">📎</span>
+                <span class="badge bg-body-secondary text-body border align-self-center" title="OS digitalizada anexada"><i class="bi bi-paperclip"></i></span>
               {% endif %}
               <a href="{% url 'chamado_imprimir' c.pk %}" target="_blank"
-                 class="btn btn-sm btn-outline-secondary btn-imprimir" title="Imprimir a OS física">🖨️</a>
+                 class="btn btn-sm btn-outline-secondary btn-imprimir" title="Imprimir a OS física"><i class="bi bi-printer-fill"></i></a>
               <a href="{% url 'chamado_detalhe' c.pk %}" class="btn btn-sm btn-outline-primary">
                 Ver OS
               </a>

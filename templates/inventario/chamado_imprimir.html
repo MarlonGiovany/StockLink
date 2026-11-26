@@ -11,6 +11,7 @@ A caixa do topo mostra o número em corpo grande justamente para isso.
   <meta charset="utf-8">
   <title>OS {{ chamado.numero_os }} — Ordem de Serviço</title>
   {% include "_icone.html" %}
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
   <style>
     /* Margem zero na página tira o cabeçalho e o rodapé que o navegador
        põe sozinho (data, endereço, "1/2"); a margem de verdade fica no
@@ -93,7 +94,7 @@ A caixa do topo mostra o número em corpo grande justamente para isso.
   <span>Ordem de Serviço {{ chamado.numero_os }} — pronta para impressão</span>
   <span>
     <a class="btn-tela secundario" href="{% url 'chamado_detalhe' chamado.pk %}">&larr; Voltar para a OS</a>
-    <button class="btn-tela" type="button" onclick="window.print()">🖨️ Imprimir</button>
+    <button class="btn-tela" type="button" onclick="window.print()"><i class="bi bi-printer-fill"></i> Imprimir</button>
   </span>
 </div>
 

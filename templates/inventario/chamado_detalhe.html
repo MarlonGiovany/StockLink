@@ -12,17 +12,17 @@
   <div class="d-flex flex-wrap gap-2 align-items-center">
     <a href="{% url 'chamado_imprimir' chamado.pk %}" target="_blank"
        class="btn text-white d-none d-lg-inline-block" style="background:#162D63;">
-      🖨️ Imprimir OS
+      <i class="bi bi-printer-fill"></i> Imprimir OS
     </a>
     {% if perms.inventario.add_chamado %}
-    <a href="{% url 'chamado_editar' chamado.pk %}" class="btn btn-outline-primary d-none d-lg-inline-block">✏️ Editar</a>
+    <a href="{% url 'chamado_editar' chamado.pk %}" class="btn btn-outline-primary d-none d-lg-inline-block"><i class="bi bi-pencil-fill"></i> Editar</a>
     {% endif %}
     {% if chamado.tecnico_id == user.pk %}
       <span class="badge fs-6 selo-minha-os">Sua OS</span>
     {% endif %}
     <span class="badge fs-6"
           style="background:{{ chamado.alerta.cor }};color:{{ chamado.alerta.texto }};">
-      {{ chamado.alerta.icone }} {{ chamado.alerta.rotulo }}
+      <i class="bi bi-circle-fill" style="font-size:.6em;vertical-align:middle;"></i> {{ chamado.alerta.rotulo }}
     </span>
     {% if chamado.encerrado %}
       <span class="badge fs-6" style="background:#16A34A;">Encerrado</span>
@@ -35,24 +35,24 @@
 {# Celular: as ações principais logo no topo, sem precisar rolar até elas #}
 <div class="d-flex flex-wrap gap-2 mb-3 d-lg-none">
   <a href="{% url 'chamado_imprimir' chamado.pk %}" target="_blank"
-     class="btn text-white flex-fill" style="background:#162D63;">🖨️ Imprimir</a>
+     class="btn text-white flex-fill" style="background:#162D63;"><i class="bi bi-printer-fill"></i> Imprimir</a>
   {% if perms.inventario.add_chamado %}
-    <a href="{% url 'chamado_editar' chamado.pk %}" class="btn btn-outline-primary flex-fill">✏️ Editar</a>
+    <a href="{% url 'chamado_editar' chamado.pk %}" class="btn btn-outline-primary flex-fill"><i class="bi bi-pencil-fill"></i> Editar</a>
   {% endif %}
   {% if pode_encerrar and not chamado.encerrado %}
-    <a href="#execucao" class="btn text-white flex-fill" style="background:#16A34A;">✔ Encerrar</a>
+    <a href="#execucao" class="btn text-white flex-fill" style="background:#16A34A;"><i class="bi bi-check-lg"></i> Encerrar</a>
   {% endif %}
   {% if chamado.arquivo_os %}
-    <a href="{% url 'chamado_arquivo' chamado.pk %}" target="_blank" class="btn btn-outline-primary flex-fill">📎 Ver anexo</a>
+    <a href="{% url 'chamado_arquivo' chamado.pk %}" target="_blank" class="btn btn-outline-primary flex-fill"><i class="bi bi-paperclip"></i> Ver anexo</a>
   {% elif pode_encerrar %}
-    <a href="#os-digitalizada" class="btn btn-outline-primary flex-fill">📎 Anexar</a>
+    <a href="#os-digitalizada" class="btn btn-outline-primary flex-fill"><i class="bi bi-paperclip"></i> Anexar</a>
   {% endif %}
 </div>
 
 {% if chamado.urgente and not chamado.encerrado %}
   <div class="alert d-flex align-items-center gap-2"
        style="background:#FEE2E2;border:1px solid #DC2626;color:#7F1D1D;">
-    <span style="font-size:1.4rem;line-height:1;">🔴</span>
+    <span style="font-size:1.4rem;line-height:1;"><i class="bi bi-exclamation-circle-fill"></i></span>
     <div><strong>Chamado urgente.</strong> Aberto há {{ chamado.tempo_aberto_texto }} e ainda sem encerramento.</div>
   </div>
 {% endif %}
@@ -107,7 +107,7 @@
         <p class="mb-3 mt-1" style="white-space:pre-wrap;">{{ chamado.descricao }}</p>
 
         <div class="alert alert-light border mb-0 small">
-          📄 A <strong>OS física</strong> sai com este mesmo número
+          <i class="bi bi-file-earmark-pdf-fill"></i> A <strong>OS física</strong> sai com este mesmo número
           (<strong>{{ chamado.numero_os }}</strong>). Imprima, entregue ao técnico e,
           depois de assinada, digitalize e anexe aqui.
         </div>
@@ -240,7 +240,7 @@
       <p class="mb-2">
         <a href="{% url 'chamado_arquivo' chamado.pk %}" target="_blank"
            class="btn btn-outline-primary">
-          📎 Abrir {{ chamado.nome_arquivo_os }}
+          <i class="bi bi-paperclip"></i> Abrir {{ chamado.nome_arquivo_os }}
         </a>
       </p>
       <p class="text-muted small mb-0">
@@ -287,7 +287,7 @@
           </div>
           <div class="col-md-4">
             <button name="anexar" value="1" class="btn text-white w-100" style="background:#162D63;">
-              📎 Anexar
+              <i class="bi bi-paperclip"></i> Anexar
             </button>
           </div>
         </form>

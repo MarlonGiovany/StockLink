@@ -659,15 +659,15 @@ class Chamado(models.Model):
         """
         tabela = {
             self.Prioridade.URGENTE: {
-                "cor": "#DC2626", "texto": "#FFFFFF", "icone": "🔴",
+                "cor": "#DC2626", "texto": "#FFFFFF",
                 "rotulo": "Urgente", "ordem": 1,
             },
             self.Prioridade.NORMAL: {
-                "cor": "#EAB308", "texto": "#1F2937", "icone": "🟡",
+                "cor": "#EAB308", "texto": "#1F2937",
                 "rotulo": "Normal", "ordem": 2,
             },
             self.Prioridade.LEVE: {
-                "cor": "#16A34A", "texto": "#FFFFFF", "icone": "🟢",
+                "cor": "#16A34A", "texto": "#FFFFFF",
                 "rotulo": "Leve", "ordem": 3,
             },
         }
