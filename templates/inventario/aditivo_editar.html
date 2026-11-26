@@ -25,7 +25,7 @@
           {% if field.name == "arquivo" and aditivo.arquivo and pode_ver_pdfs %}
             <div class="form-text">
               Arquivo atual:
-              <a href="{% url 'aditivo_pdf' aditivo.pk %}" target="_blank">📄 PDF do aditivo</a>
+              <a href="{% url 'aditivo_pdf' aditivo.pk %}" target="_blank"><i class="bi bi-file-earmark-pdf-fill"></i> PDF do aditivo</a>
               — envie um novo só se quiser substituir.
             </div>
           {% endif %}

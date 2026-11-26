@@ -40,8 +40,8 @@
   </div>
   <div class="d-flex flex-wrap gap-2 dg-nao-imprimir">
     <a href="?{{ query }}" class="btn btn-sm btn-outline-secondary" title="Recalcular com os dados de agora">↻ Atualizar</a>
-    <a href="{% url 'dashboard_excel' %}?{{ query }}" class="btn btn-sm btn-excel">⬇ Excel</a>
-    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()" title="Na janela de impressão, escolha 'Salvar como PDF'">🖨 PDF / imprimir</button>
+    <a href="{% url 'dashboard_excel' %}?{{ query }}" class="btn btn-sm btn-excel">{% include "inventario/_icone_baixar.html" %} Excel</a>
+    <button type="button" class="btn btn-sm btn-outline-secondary" onclick="window.print()" title="Na janela de impressão, escolha 'Salvar como PDF'"><i class="bi bi-printer-fill"></i> PDF / imprimir</button>
   </div>
 </div>
 
@@ -83,7 +83,7 @@
 
 {% if d.avisos %}
 <div class="alert alert-warning py-2 small mb-0">
-  <strong>⚠ Atenção aos dados:</strong>
+  <strong><i class="bi bi-exclamation-triangle-fill"></i> Atenção aos dados:</strong>
   <ul class="mb-0 ps-3">{% for aviso in d.avisos %}<li>{{ aviso }}</li>{% endfor %}</ul>
 </div>
 {% endif %}

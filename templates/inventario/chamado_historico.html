@@ -16,7 +16,7 @@
 <button class="btn btn-outline-primary w-100 mb-2 d-lg-none" type="button"
         data-bs-toggle="collapse" data-bs-target="#filtros-historico"
         aria-expanded="false" aria-controls="filtros-historico">
-  🔎 Filtros{% if cliente or status or tecnico or de or ate %} <span class="badge bg-primary ms-1">ativos</span>{% endif %}
+  <i class="bi bi-funnel-fill"></i> Filtros{% if cliente or status or tecnico or de or ate %} <span class="badge bg-primary ms-1">ativos</span>{% endif %}
 </button>
 <form method="get" id="filtros-historico" class="row g-2 align-items-end mb-4 collapse d-lg-flex">
   <div class="col-12 col-md-4">
@@ -72,7 +72,7 @@
 <div class="card shadow-sm mb-4">
   <div class="card-body pb-2">
     <div class="d-flex flex-wrap justify-content-between align-items-center">
-      <h5 class="mb-0">👤 {{ linha.nome }}</h5>
+      <h5 class="mb-0"><i class="bi bi-person-fill"></i> {{ linha.nome }}</h5>
       <div class="d-flex flex-wrap gap-2">
         <span class="badge bg-body-secondary text-body border">{{ linha.total }} chamado{{ linha.total|pluralize }}</span>
         <span class="badge" style="background:#DC2626;">{{ linha.abertos }} aberto{{ linha.abertos|pluralize }}</span>

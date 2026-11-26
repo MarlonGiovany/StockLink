@@ -105,7 +105,7 @@
           <td>
             {% if c.arquivo and pode_ver_pdfs %}
               <a href="{% url 'contrato_pdf' c.pk %}" target="_blank" class="btn btn-sm btn-outline-danger" title="{{ c.nome_arquivo }}">
-                📄 Abrir
+                <i class="bi bi-file-earmark-pdf-fill"></i> Abrir
               </a>
             {% else %}—{% endif %}
           </td>
