@@ -16,6 +16,7 @@ from unittest import mock
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.core import mail
 from django.core.exceptions import ValidationError
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.core.management import call_command
@@ -2781,6 +2782,87 @@ class EdicaoDoChamadoTests(BaseComPerfis):
             self.dados(descricao="Não liga nem com outro cabo."),
         )
         self.assertEqual(resposta.status_code, 302)
+
+
+class AvisoPorEmailAoTecnicoTests(BaseComPerfis):
+    """E-mail ao técnico na abertura do chamado e sempre que ele é trocado.
+
+    Sem EMAIL_HOST_USER configurado (o padrão nos testes), o aviso é só
+    pulado — por isso cada teste que espera e-mail liga a conta via
+    override_settings.
+    """
+
+    def setUp(self):
+        super().setUp()
+        self.tecnico.email = "tecnico@example.com"
+        self.tecnico.save()
+        self.client.force_login(self.recepcao)
+
+    def dados_abertura(self, **troca):
+        dados = {
+            "cliente": self.cliente.pk, "equipamento": self.maquina.pk,
+            "prioridade": Chamado.Prioridade.NORMAL, "descricao": "Tela azul.",
+            "tecnico": self.tecnico.pk, "solicitante": "",
+        }
+        dados.update(troca)
+        return dados
+
+    def dados_edicao(self, **troca):
+        dados = {
+            "cliente": self.chamado.cliente_id, "equipamento": self.chamado.equipamento_id,
+            "prioridade": self.chamado.prioridade, "descricao": self.chamado.descricao,
+            "tecnico": self.chamado.tecnico_id, "solicitante": "",
+        }
+        dados.update(troca)
+        return dados
+
+    @override_settings(EMAIL_HOST_USER="recepcao@example.com",
+                        DEFAULT_FROM_EMAIL="recepcao@example.com")
+    def test_abrir_chamado_avisa_o_tecnico(self):
+        resposta = self.client.post(reverse("chamado_novo"), self.dados_abertura())
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(self.tecnico.email, mail.outbox[0].to)
+
+    @override_settings(EMAIL_HOST_USER="recepcao@example.com",
+                        DEFAULT_FROM_EMAIL="recepcao@example.com")
+    def test_trocar_o_tecnico_na_edicao_avisa_o_novo(self):
+        from django.contrib.auth.models import Group
+        novo_tecnico = get_user_model().objects.create_user(
+            "tecnico2", password="x", email="tecnico2@example.com"
+        )
+        novo_tecnico.groups.add(Group.objects.get(name="Técnico"))
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados_edicao(tecnico=novo_tecnico.pk),
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn(novo_tecnico.email, mail.outbox[0].to)
+
+    @override_settings(EMAIL_HOST_USER="recepcao@example.com",
+                        DEFAULT_FROM_EMAIL="recepcao@example.com")
+    def test_editar_sem_trocar_o_tecnico_nao_avisa(self):
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados_edicao(descricao="Atualizado."),
+        )
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(len(mail.outbox), 0)
+
+    def test_sem_conta_de_email_configurada_nao_trava_o_salvamento(self):
+        resposta = self.client.post(reverse("chamado_novo"), self.dados_abertura())
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(len(mail.outbox), 0)
+
+    @override_settings(EMAIL_HOST_USER="recepcao@example.com",
+                        DEFAULT_FROM_EMAIL="recepcao@example.com")
+    def test_tecnico_sem_email_nao_trava_o_salvamento(self):
+        self.tecnico.email = ""
+        self.tecnico.save()
+        resposta = self.client.post(reverse("chamado_novo"), self.dados_abertura())
+        self.assertEqual(resposta.status_code, 302)
+        self.assertEqual(len(mail.outbox), 0)
 
 
 class AvisoDeClienteParecidoTests(BaseLogada):

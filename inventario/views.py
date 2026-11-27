@@ -20,6 +20,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 
 from . import dashboard as painel_gerencial
+from . import notificacoes
 from . import planilhas
 from . import tarefas_sso
 
@@ -1663,6 +1664,7 @@ def chamado_novo(request):
             chamado = form.save(commit=False)
             chamado.aberto_por = request.user
             chamado.save()
+            notificacoes.avisa_tecnico(chamado)
             messages.success(
                 request,
                 f"Chamado aberto — Ordem de Serviço {chamado.numero_os}. "
@@ -1688,9 +1690,12 @@ def chamado_editar(request, pk):
         Chamado.objects.select_related("equipamento", "cliente"), pk=pk
     )
     if request.method == "POST":
+        tecnico_anterior_id = chamado.tecnico_id
         form = ChamadoEdicaoForm(request.POST, instance=chamado)
         if form.is_valid():
             form.save()
+            if chamado.tecnico_id != tecnico_anterior_id:
+                notificacoes.avisa_tecnico(chamado)
             messages.success(
                 request, f"Ordem de Serviço {chamado.numero_os} atualizada."
             )
