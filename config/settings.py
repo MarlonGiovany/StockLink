@@ -235,6 +235,19 @@ USUARIO_ANALISTA = 'Admin'
 TAREFAS_URL = os.environ.get('TAREFAS_URL', 'https://inforlink-tarefas.vercel.app')
 TAREFAS_SSO_SECRET = os.environ.get('TAREFAS_SSO_SECRET', '')
 
+# E-mail de aviso ao técnico (ver inventario/notificacoes.py)
+# ------------------------------------------------------------
+# Sem EMAIL_HOST_USER configurado, o aviso é simplesmente pulado — não é
+# erro, só significa que ninguém configurou uma conta de envio ainda.
+# EMAIL_HOST_PASSWORD é a "senha de app" do Gmail (não a senha normal da
+# conta), gerada em myaccount.google.com/apppasswords.
+EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT = int(os.environ.get('EMAIL_PORT', '587'))
+EMAIL_USE_TLS = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL = os.environ.get('DEFAULT_FROM_EMAIL', EMAIL_HOST_USER)
+
 # Autenticação
 LOGIN_URL = 'login'
 LOGIN_REDIRECT_URL = 'equipamento_lista'
