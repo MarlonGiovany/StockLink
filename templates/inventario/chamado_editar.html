@@ -11,11 +11,17 @@
       <div class="card-body p-3 p-md-4">
         <h4 class="mb-1">Editar Ordem de Serviço {{ chamado.numero_os }}</h4>
         <p class="text-muted mb-3">
-          Máquina: <strong>INF-{{ chamado.equipamento.numero_patrimonio }}</strong>
+          Máquina atual: <strong>INF-{{ chamado.equipamento.numero_patrimonio }}</strong>
           {{ chamado.equipamento.marca }} {{ chamado.equipamento.modelo }}.
           {% if dono_atual %}Hoje ela está locada para <strong>{{ dono_atual }}</strong>.{% else %}Hoje ela não está locada.{% endif %}
-          O número da OS não muda.
+          Errou a máquina na abertura? Troque pelo campo abaixo. O número da OS não muda.
         </p>
+
+        {% if form.non_field_errors %}
+          <div class="alert alert-danger">
+            {% for erro in form.non_field_errors %}{{ erro }}{% endfor %}
+          </div>
+        {% endif %}
 
         <form method="post" novalidate>
           {% csrf_token %}
@@ -23,6 +29,9 @@
             <div class="mb-3">
               <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}</label>
               {{ field }}
+              {% if field.name == "equipamento" %}
+                <div class="form-text" id="aviso-maquinas"></div>
+              {% endif %}
               {% for erro in field.errors %}
                 <div class="text-danger small">{{ erro }}</div>
               {% endfor %}
@@ -40,4 +49,50 @@
 </div>
 
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// A lista de máquinas segue o cliente escolhido, igual na abertura do
+// chamado — mas aqui a máquina já atribuída nunca desaparece da lista
+// mesmo que a locação não bata mais com o cliente selecionado, para a OS
+// continuar mostrando o que está salvo até o operador decidir trocar.
+(function () {
+  const cliente = document.getElementById('id_cliente');
+  const maquina = document.getElementById('id_equipamento');
+  const aviso = document.getElementById('aviso-maquinas');
+  if (!cliente || !maquina) return;
+
+  const todas = Array.from(maquina.options).map(function (o) {
+    return { valor: o.value, texto: o.text, cliente: o.dataset.cliente || '' };
+  });
+  const valorAtual = maquina.value;
+
+  function atualizar(manterEscolha) {
+    const escolhido = cliente.value;
+    const anterior = maquina.value;
+
+    const disponiveis = todas.filter(function (o) {
+      return o.valor !== '' && (o.cliente === escolhido || o.valor === valorAtual);
+    });
+
+    maquina.innerHTML = '';
+    disponiveis.forEach(function (o) {
+      const opt = document.createElement('option');
+      opt.value = o.valor;
+      opt.text = o.texto;
+      maquina.appendChild(opt);
+    });
+
+    if (manterEscolha && disponiveis.some(function (o) { return o.valor === anterior; })) {
+      maquina.value = anterior;
+    }
+
+    aviso.textContent = disponiveis.length + ' máquina(s) disponível(eis) para este cliente.';
+  }
+
+  cliente.addEventListener('change', function () { atualizar(false); });
+  atualizar(true);
+})();
+</script>
 {% endblock %}

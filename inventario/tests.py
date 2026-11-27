@@ -2693,23 +2693,68 @@ class EdicaoEExclusaoDeFornecedorTests(BaseComPerfis):
 class EdicaoDoChamadoTests(BaseComPerfis):
     def dados(self, **troca):
         dados = {
-            "cliente": self.chamado.cliente_id, "prioridade": self.chamado.prioridade,
+            "cliente": self.chamado.cliente_id, "equipamento": self.chamado.equipamento_id,
+            "prioridade": self.chamado.prioridade,
             "descricao": self.chamado.descricao, "tecnico": self.chamado.tecnico_id,
             "solicitante": "",
         }
         dados.update(troca)
         return dados
 
-    def test_recepcao_troca_o_cliente_e_a_os_nao_muda(self):
+    def test_recepcao_troca_cliente_e_maquina_juntos_e_a_os_nao_muda(self):
         self.client.force_login(self.recepcao)
         resposta = self.client.post(
             reverse("chamado_editar", args=[self.chamado.pk]),
-            self.dados(cliente=self.outro_cliente.pk),
+            self.dados(cliente=self.outro_cliente.pk, equipamento=self.maquina_outro.pk),
         )
         self.assertRedirects(resposta, reverse("chamado_detalhe", args=[self.chamado.pk]))
         self.chamado.refresh_from_db()
         self.assertEqual(self.chamado.cliente, self.outro_cliente)
+        self.assertEqual(self.chamado.equipamento, self.maquina_outro)
+
+    def test_recepcao_corrige_so_a_maquina_errada(self):
+        # A máquina 1001 (sem produto de impressora) não tem locação — vamos
+        # dar uma locação ativa dela para o mesmo cliente do chamado, para
+        # simular "o operador escolheu a máquina errada na abertura".
+        maquina_certa = Equipamento.objects.get(numero_patrimonio="1001")
+        Locacao.objects.create(
+            equipamento=maquina_certa, cliente=self.cliente, valor="250.00",
+            data_inicio="2026-08-05", ativa=True,
+        )
+        self.client.force_login(self.recepcao)
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados(equipamento=maquina_certa.pk),
+        )
+        self.assertRedirects(resposta, reverse("chamado_detalhe", args=[self.chamado.pk]))
+        self.chamado.refresh_from_db()
+        self.assertEqual(self.chamado.equipamento, maquina_certa)
+        self.assertEqual(self.chamado.cliente, self.cliente)
+
+    def test_maquina_sem_locacao_para_o_cliente_e_rejeitada(self):
+        self.client.force_login(self.recepcao)
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados(equipamento=self.maquina_outro.pk),
+        )
+        self.assertEqual(resposta.status_code, 200)
+        self.assertContains(resposta, "não está locada")
+        self.chamado.refresh_from_db()
         self.assertEqual(self.chamado.equipamento, self.maquina)
+
+    def test_editar_outros_campos_nao_exige_recorrigir_maquina_antiga(self):
+        # Locação da máquina do chamado termina depois da abertura — mas
+        # continua dando para editar os outros campos sem precisar trocar a
+        # máquina, porque cliente e equipamento não mudaram.
+        self.maquina.locacoes.update(ativa=False)
+        self.client.force_login(self.recepcao)
+        resposta = self.client.post(
+            reverse("chamado_editar", args=[self.chamado.pk]),
+            self.dados(descricao="Não liga nem com outro cabo."),
+        )
+        self.assertRedirects(resposta, reverse("chamado_detalhe", args=[self.chamado.pk]))
+        self.chamado.refresh_from_db()
+        self.assertEqual(self.chamado.descricao, "Não liga nem com outro cabo.")
 
     def test_botao_editar_na_os(self):
         self.client.force_login(self.recepcao)

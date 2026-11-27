@@ -737,15 +737,24 @@ class ChamadoAberturaForm(BootstrapFormMixin, forms.ModelForm):
 class ChamadoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
     """Corrige o que a recepção preencheu ao abrir o chamado.
 
-    A máquina fica de fora de propósito: ela é o próprio assunto da OS, e o
-    número impresso na folha continua o mesmo. Já o cliente pode trocar para
-    qualquer um — é o caso da máquina que foi aberta no cadastro errado e
-    depois passou para o cliente certo.
+    A máquina entra aqui para corrigir o caso de o operador ter escolhido a
+    errada na abertura. Vale a mesma trava de segurança da abertura: a
+    máquina escolhida precisa estar mesmo locada para o cliente do chamado.
+    O número impresso na folha (nº da OS) continua o mesmo — ele é o `pk`,
+    não muda com a edição.
     """
+
+    equipamento = EquipamentoChoiceField(
+        queryset=Equipamento.objects.none(),
+        label="Máquina",
+    )
 
     class Meta:
         model = Chamado
-        fields = ["cliente", "prioridade", "descricao", "tecnico", "solicitante"]
+        fields = [
+            "cliente", "equipamento", "prioridade",
+            "descricao", "tecnico", "solicitante",
+        ]
         widgets = {
             "descricao": forms.Textarea(attrs={"rows": 4}),
         }
@@ -755,6 +764,11 @@ class ChamadoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
         self.fields["cliente"].queryset = Cliente.objects.order_by("nome")
         self.fields["cliente"].required = True
         self.fields["cliente"].empty_label = "— escolha o cliente —"
+        # A máquina já escolhida continua na lista mesmo que a locação tenha
+        # acabado depois — senão o formulário não salvaria sem trocá-la.
+        self.fields["equipamento"].queryset = Equipamento.objects.filter(
+            Q(locacoes__ativa=True) | Q(pk=self.instance.equipamento_id)
+        ).select_related("produto").distinct().order_by("numero_patrimonio")
         # O técnico já designado continua na lista mesmo que tenha sido
         # desativado depois — senão o formulário não salvaria sem trocá-lo.
         self.fields["tecnico"].queryset = get_user_model().objects.filter(
@@ -762,6 +776,30 @@ class ChamadoEdicaoForm(BootstrapFormMixin, forms.ModelForm):
         ).order_by("username")
         self.fields["tecnico"].required = True
         self.fields["tecnico"].empty_label = "— escolha o técnico —"
+
+    def clean(self):
+        dados = super().clean()
+        cliente = dados.get("cliente")
+        equipamento = dados.get("equipamento")
+
+        # Só reexige a locação ativa quando cliente ou máquina de fato mudam
+        # — chamado antigo cuja locação já terminou continua editável nos
+        # outros campos sem precisar corrigir essa dupla.
+        mudou = (
+            (equipamento and equipamento.pk != self.instance.equipamento_id)
+            or (cliente and cliente.pk != self.instance.cliente_id)
+        )
+        if mudou and cliente and equipamento:
+            locacao = equipamento.locacao_ativa
+            if not locacao or locacao.cliente_id != cliente.pk:
+                dono = locacao.cliente if locacao else None
+                self.add_error(
+                    "equipamento",
+                    f"A máquina INF-{equipamento.numero_patrimonio} não está "
+                    f"locada para {cliente}"
+                    + (f" — ela está com {dono}." if dono else "."),
+                )
+        return dados
 
 
 # Formatos aceitos na digitalização da OS: o scanner da recepção costuma
