@@ -1679,7 +1679,7 @@ def chamado_novo(request):
 @permission_required("inventario.add_chamado", raise_exception=True)
 @exige_chamados
 def chamado_editar(request, pk):
-    """Corrige cliente, urgência, descrição, técnico ou quem pediu.
+    """Corrige cliente, máquina, urgência, descrição, técnico ou quem pediu.
 
     Fica com quem abre chamado (Recepção), não com o técnico: o técnico só
     registra o que fez e encerra. A OS continua com o mesmo número.
